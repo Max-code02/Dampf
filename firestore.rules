@@ -382,7 +382,7 @@ service cloud.firestore {
     match /suggestions/{suggestionId} {
       allow read: if true;
       allow create: if isValidSuggestion(incoming()) && 
-                       (isSignedIn() ? incoming().authorId == request.auth.uid : incoming().authorId.startsWith('guest_')) && 
+                       (isSignedIn() ? incoming().authorId == request.auth.uid : incoming().authorId.matches('^guest_.*')) && 
                        incoming().status == 'pending' && 
                        incoming().upvotes == 1 && 
                        incoming().upvotedBy.size() == 1 && 
