@@ -399,8 +399,7 @@ service cloud.firestore {
         incoming().authorName == existing().authorName &&
         incoming().createdAt == existing().createdAt &&
         incoming().status == existing().status &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments']) &&
-        (incoming().comments == existing().comments || isSignedIn())
+        incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments'])
       );
     }
   }

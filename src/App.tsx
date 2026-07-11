@@ -4646,17 +4646,30 @@ export default function App() {
     }
   };
 
-  const handleCommentSubmit = async (suggestionId: string, text: string) => {
-    if (!user) return setShowLoginModal(true);
+  const handleCommentSubmit = async (suggestionId: string, text: string, optionalGuestName?: string) => {
     if (!text.trim()) return;
     try {
       const parentSg = suggestions.find(s => s.id === suggestionId);
       if (!parentSg) return;
       
+      let authorIdVal = '';
+      let authorNameVal = '';
+      
+      if (user) {
+        authorIdVal = user.uid;
+        authorNameVal = myProfile?.displayName || user.displayName || 'Unbekannt';
+      } else {
+        authorIdVal = guestId;
+        authorNameVal = optionalGuestName || localStorage.getItem('suggestions_guest_name') || 'Gast-Spieler';
+        if (optionalGuestName) {
+          localStorage.setItem('suggestions_guest_name', optionalGuestName);
+        }
+      }
+
       const newComment: SuggestionComment = {
         id: Math.random().toString(36).substring(2, 11),
-        authorId: user.uid,
-        authorName: myProfile?.displayName || user.displayName || 'Unbekannt',
+        authorId: authorIdVal,
+        authorName: authorNameVal,
         text: text.trim(),
         createdAt: new Date().toISOString()
       };
@@ -10490,7 +10503,7 @@ export default function App() {
                             <p className="text-[10px] text-neutral-500">
                               Von <span className="text-neutral-300">{sug.authorName}</span>
                             </p>
-                            {isAdmin && (
+                            {(isAdmin || isOwner) && (
                               <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                 <select
                                   value={sug.status || 'pending'}
@@ -10553,18 +10566,32 @@ export default function App() {
                             )}
                             
                             {/* Post comment form */}
-                            {user ? (
-                              <form 
-                                onSubmit={(e) => {
-                                  e.preventDefault();
-                                  const input = e.currentTarget.elements.namedItem('commentText') as HTMLInputElement;
-                                  if (input && input.value.trim()) {
-                                    handleCommentSubmit(sug.id, input.value);
-                                    input.value = '';
-                                  }
-                                }}
-                                className="flex gap-2 mt-2"
-                              >
+                            <form 
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const input = e.currentTarget.elements.namedItem('commentText') as HTMLInputElement;
+                                let optionalGuestName = '';
+                                if (!user) {
+                                  const guestNameInput = e.currentTarget.elements.namedItem('commentGuestName') as HTMLInputElement | null;
+                                  optionalGuestName = (guestNameInput?.value || '').trim();
+                                }
+                                if (input && input.value.trim()) {
+                                  handleCommentSubmit(sug.id, input.value, optionalGuestName);
+                                  input.value = '';
+                                }
+                              }}
+                              className="space-y-2 mt-2"
+                            >
+                              {!user && (
+                                <input
+                                  name="commentGuestName"
+                                  type="text"
+                                  placeholder="Dein Name (optional)..."
+                                  defaultValue={localStorage.getItem('suggestions_guest_name') || ''}
+                                  className="w-full bg-black border border-neutral-800 rounded-lg px-2.5 py-1 text-[11px] focus:border-blue-500 outline-none transition-colors text-neutral-300"
+                                />
+                              )}
+                              <div className="flex gap-2">
                                 <input
                                   name="commentText"
                                   type="text"
@@ -10578,14 +10605,8 @@ export default function App() {
                                 >
                                   Senden
                                 </button>
-                              </form>
-                            ) : (
-                              <div className="bg-neutral-900/50 p-2 rounded-lg text-center border border-neutral-900">
-                                <p className="text-[10px] text-neutral-500">
-                                  Bitte <button onClick={() => setShowLoginModal(true)} className="text-blue-400 hover:underline font-semibold">melde dich an</button>, um zu kommentieren.
-                                </p>
                               </div>
-                            )}
+                            </form>
                           </div>
                         )}
                       </div>
