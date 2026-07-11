@@ -1,0 +1,365 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSystemBot() {
+      return isSignedIn() && request.auth.token.get('email', '') == 'system-quiz-bot@community.local';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSystemBot() ||
+        request.auth.uid == 'xcTqBIJ4OQQOk3QZ6jXR4dVTPwn2' ||
+        ('email' in request.auth.token && (
+          request.auth.token.email == 'max.schule13@gmail.com' ||
+          request.auth.token.email == 'max@community.local' ||
+          request.auth.token.email == 'dampf@community.local' ||
+          request.auth.token.email == 'dampfk@community.local' ||
+          request.auth.token.email == 'block5@community.local'
+        )) ||
+        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.get('role', 'Member') in ['Admin', 'Owner', 'Root'] ||
+          get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.get('minecraftUsername', '') == 'Block5'
+        )) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner() {
+      return isSignedIn() && (
+        isSystemBot() ||
+        request.auth.uid == 'xcTqBIJ4OQQOk3QZ6jXR4dVTPwn2' ||
+        ('email' in request.auth.token && (
+          request.auth.token.email == 'max.schule13@gmail.com' ||
+          request.auth.token.email == 'block5@community.local'
+        )) ||
+        ('email' in request.auth.token && request.auth.token.email != null && request.auth.token.email.matches('.*dampfk.*')) ||
+        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.get('role', 'Member') in ['Owner', 'Root'])
+      );
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+    }
+
+    function isRoot() {
+       return isSignedIn() && (
+         exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.get('minecraftUsername', '') == 'Block5'
+       );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ChatMessage Validation
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['text', 'userId', 'displayName', 'createdAt']) &&
+             data.keys().size() <= 15 &&
+             data.text is string && data.text.size() <= 2000 &&
+             (data.userId == request.auth.uid || data.userId == "system" || data.userId == "quiz_bot") &&
+             data.displayName is string && data.displayName.size() <= 64 &&
+             (data.createdAt == request.time || data.createdAt is timestamp) &&
+             (!('tempId' in data) || (data.tempId is string && data.tempId.size() <= 256)) &&
+             (!('role' in data) || (data.role is string && data.role.size() <= 64)) &&
+             (!('isAction' in data) || (data.isAction is bool)) &&
+             (!('isLocal' in data) || (data.isLocal is bool)) &&
+             (!('isStaffOnly' in data) || (data.isStaffOnly is bool)) &&
+             (!('channel' in data) || (data.channel is string && data.channel.size() <= 64)) &&
+             (!('purchasedRank' in data) || (data.purchasedRank is string && data.purchasedRank.size() <= 64));
+    }
+
+    // Player Validation
+    function isValidPlayer(data) {
+      return data.keys().hasAll(['username', 'server', 'lastSeen']) &&
+             data.keys().size() == 3 &&
+             data.username is string && data.username.size() <= 64 &&
+             data.server in ['none', 'pvp', 'survival'] &&
+             data.lastSeen is string;
+    }
+
+    // ServerStatus Validation
+    function isValidServerStatus(data) {
+      return data.keys().hasAll(['online', 'playerCount', 'maxPlayers']) &&
+             (data.keys().size() == 3 || (data.keys().size() == 4 && data.maintenance is bool)) &&
+             data.online is bool &&
+             data.playerCount is int &&
+             data.maxPlayers is int;
+    }
+
+    // UserProfile Validation
+    function isValidUserProfile(data, docId) {
+      return (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 64)) &&
+             (!('minecraftUsername' in data) || (data.minecraftUsername is string && data.minecraftUsername.size() <= 64)) &&
+             (!('isOnline' in data) || data.isOnline is bool) &&
+             (!('currentServer' in data) || data.currentServer in ['none', 'pvp', 'survival']) &&
+             // Ensure coins is a non-negative integer
+             (!('coins' in data) || (data.coins is int && data.coins >= 0)) &&
+             // Role Security: Setting staff roles (Admin/Owner/Root) requires isOwner()
+             (!('role' in data) || !(data.role in ['Admin', 'Owner', 'Root']) || isOwner()) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp || data.updatedAt is string)) &&
+             (!('userId' in data) || data.userId == docId);
+    }
+
+    // Clan Validation
+    function isValidClan(data) {
+      return data.keys().hasAll(['name', 'tag', 'leaderId', 'createdAt', 'memberCount', 'level', 'xp', 'totalKills']) &&
+             (data.keys().size() >= 8 && data.keys().size() <= 10) &&
+             data.name is string && data.name.size() <= 32 &&
+             data.tag is string && data.tag.size() <= 4 &&
+             data.leaderId is string &&
+             data.memberCount is int &&
+             data.level is int &&
+             data.xp is int &&
+             data.totalKills is int &&
+             (!('announcement' in data) || (data.announcement is string && data.announcement.size() <= 200)) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidClanMember(data, userId) {
+      return data.keys().hasAll(['userId', 'role', 'joinedAt', 'xpContribution']) &&
+             data.keys().size() == 4 &&
+             data.userId == userId &&
+             data.role in ['Leader', 'Officer', 'Member'] &&
+             data.xpContribution is int &&
+             data.joinedAt is timestamp;
+    }
+
+    function isValidJoinRequest(data, userId) {
+      return data.keys().hasAll(['userId', 'minecraftUsername', 'requestedAt']) &&
+             (data.keys().size() >= 3 && data.keys().size() <= 4) &&
+             data.userId == userId &&
+             data.minecraftUsername is string &&
+             data.requestedAt is timestamp;
+    }
+
+    function isValidQuest(data) {
+      return data.keys().hasAll(['title', 'goal', 'current', 'rewardXp', 'completed']) &&
+             data.keys().size() == 5 &&
+             data.title is string &&
+             data.goal is int &&
+             data.current is int &&
+             data.rewardXp is int &&
+             data.completed is bool;
+    }
+
+    // User Profiles Collection
+    match /user_profiles/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (userId == request.auth.uid || isOwner()) && isValidUserProfile(incoming(), userId) &&
+                    (!('coins' in incoming()) || incoming().get('coins', 0) <= 500 || isAdmin());
+      allow update: if isSignedIn() && (
+          // Owner can edit anyone
+          isOwner() || 
+          // Users can edit themselves (can purchase ranks but cannot set of staff/privileged roles)
+          (userId == request.auth.uid && 
+             (!('role' in incoming()) || 
+              incoming().get('role', 'Member') == existing().get('role', 'Member') ||
+              !(incoming().get('role', 'Member') in ['Admin', 'Owner', 'Root', 'Developer', 'Moderator'])
+             )
+          ) ||
+          // Admins can edit non-staff (but not promote them to staff)
+          (isAdmin() && 
+           !(existing().get('role', 'Member') in ['Admin', 'Owner', 'Root']) && 
+           (!('role' in incoming()) || !(incoming().get('role', 'Member') in ['Admin', 'Owner', 'Root']))
+          )
+      ) && isValidUserProfile(incoming(), userId);
+      allow delete: if isOwner();
+    }
+
+    // Clans
+    match /clans/{clanId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidClan(incoming()) && incoming().leaderId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (
+          exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) && 
+          isValidClan(incoming()) && (
+            // Action: Leader/Officer Full Update
+            (get(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)).data.role in ['Leader', 'Officer']) ||
+            // Action: Member Incremental Update (XP/Kills)
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['xp', 'totalKills', 'level', 'memberCount']) &&
+              incoming().xp <= existing().xp + 100 &&
+              incoming().totalKills <= existing().totalKills + 5
+            )
+          )
+        )
+      );
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.leaderId == request.auth.uid);
+
+      match /members/{userId} {
+        allow read: if true;
+        allow create, update: if isSignedIn() && (userId == request.auth.uid || isAdmin() || get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid) && isValidClanMember(incoming(), userId);
+        allow delete: if isSignedIn() && (userId == request.auth.uid || isAdmin() || get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid);
+      }
+
+      match /chat/{messageId} {
+        allow read: if isSignedIn() && (exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) || isAdmin());
+        // Simple message validation using the same logic as global chat
+        allow create: if isSignedIn() && exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.text is string && request.resource.data.text.size() <= 200;
+        allow delete: if isSignedIn() && (request.auth.uid == (resource == null ? "" : resource.data.userId) || isAdmin() || get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid);
+      }
+
+      match /requests/{userId} {
+        allow read: if isSignedIn() && (userId == request.auth.uid || exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) || isAdmin() || get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid);
+        allow create: if isSignedIn() && userId == request.auth.uid && isValidJoinRequest(incoming(), userId);
+        allow delete: if isSignedIn() && (userId == request.auth.uid || exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) || isAdmin() || get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid);
+      }
+
+      match /quests/{questId} {
+        allow read: if true;
+        allow update: if isSignedIn() && exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid)) && isValidQuest(incoming());
+        allow create, delete: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/clans/$(clanId)).data.leaderId == request.auth.uid);
+      }
+    }
+
+    // Online Players Collection
+    match /online_players/{playerId} {
+      allow read: if true;
+      allow create, update: if (isAdmin() || (isSignedIn() && playerId == request.auth.uid)) && isValidId(playerId) && isValidPlayer(incoming());
+      allow delete: if isAdmin() || (isSignedIn() && playerId == request.auth.uid);
+    }
+
+    // Server Status Collection
+    match /server_status/{serverId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(serverId) && isValidServerStatus(incoming());
+    }
+
+    // Chat Messages
+    match /chat_messages/{messageId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (isValidChatMessage(incoming()) || isSystemBot());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // App Config
+    match /app_config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // News Collection
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Polls Collection
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn() || isAdmin(); // Allow anyone signed in to vote
+    }
+
+    // Shop Collection
+    function isValidShopItem(data) {
+      return data.keys().hasAll(['name', 'description', 'price', 'category', 'isActive', 'createdAt']) &&
+             data.keys().size() == 6 &&
+             data.name is string && data.name.size() <= 64 &&
+             data.description is string && data.description.size() <= 200 &&
+             data.price is int && data.price >= 0 &&
+             data.category in ['Ränge', 'Items', 'Vorteile', 'Boxen', 'Ausrüstung', 'Farben'] &&
+             data.isActive is bool &&
+             data.createdAt is timestamp;
+    }
+
+    match /shop/{itemId} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Shop Logs & User Purchases
+    match /shop_logs/{logId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/purchases/{purchaseId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // Shared backgrounds validation
+    function isValidSharedBackground(data) {
+      return data.keys().hasAll(['imageUrl', 'title', 'uploadedBy', 'userId', 'createdAt']) &&
+             data.keys().size() == 5 &&
+             data.imageUrl is string &&
+             data.title is string && data.title.size() <= 64 &&
+             data.uploadedBy is string && data.uploadedBy.size() <= 64 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             (data.createdAt == request.time || data.createdAt is timestamp);
+    }
+
+    // Shared weathers validation
+    function isValidSharedWeather(data) {
+      return data.keys().hasAll(['title', 'type', 'colors', 'speedMultiplier', 'particleScale', 'uploadedBy', 'userId', 'createdAt']) &&
+             data.keys().size() <= 26 &&
+             data.title is string && data.title.size() <= 64 &&
+             data.type is string && (data.type == 'rain' || data.type == 'snow' || data.type == 'leaves') &&
+             data.colors is list && data.colors.size() <= 10 &&
+             data.speedMultiplier is string && (data.speedMultiplier == 'gentle' || data.speedMultiplier == 'moderate' || data.speedMultiplier == 'tempest') &&
+             data.particleScale is string && (data.particleScale == 'fine' || data.particleScale == 'medium' || data.particleScale == 'chunk') &&
+             data.uploadedBy is string && data.uploadedBy.size() <= 64 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             (data.createdAt == request.time || data.createdAt is timestamp) &&
+             (!data.keys().hasAny(['particleCount']) || data.particleCount is int) &&
+             (!data.keys().hasAny(['windDrift']) || data.windDrift is number || data.windDrift is int) &&
+             (!data.keys().hasAny(['gravityMult']) || data.gravityMult is number || data.gravityMult is int) &&
+             (!data.keys().hasAny(['particleShape']) || data.particleShape is string) &&
+             (!data.keys().hasAny(['emojiString']) || data.emojiString is string) &&
+             (!data.keys().hasAny(['glow']) || data.glow is bool) &&
+             (!data.keys().hasAny(['swayAmplitude']) || data.swayAmplitude is number || data.swayAmplitude is int) &&
+             (!data.keys().hasAny(['enableLightning']) || data.enableLightning is bool) &&
+             (!data.keys().hasAny(['lightningFrequency']) || data.lightningFrequency is number || data.lightningFrequency is int) &&
+             (!data.keys().hasAny(['lightningColor']) || data.lightningColor is string) &&
+             (!data.keys().hasAny(['enableSplashes']) || data.enableSplashes is bool) &&
+             (!data.keys().hasAny(['splashSize']) || data.splashSize is number || data.splashSize is int) &&
+             (!data.keys().hasAny(['trailLength']) || data.trailLength is number || data.trailLength is int) &&
+             (!data.keys().hasAny(['overlayColor']) || data.overlayColor is string) &&
+             (!data.keys().hasAny(['overlayOpacity']) || data.overlayOpacity is number || data.overlayOpacity is int);
+    }
+
+    match /shared_backgrounds/{bgId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSharedBackground(incoming()) && incoming().userId == request.auth.uid;
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update: if false;
+    }
+
+    match /shared_weathers/{weatherId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSharedWeather(incoming()) && incoming().userId == request.auth.uid;
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update: if false;
+    }
+  }
+}

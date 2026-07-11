@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-mc-red: #ff3b3b;
+  --color-mc-dark-red: #8b0000;
+  --color-mc-gold: #ffac00;
+  --color-mc-green: #3fb158;
+  --color-mc-blue: #3b82f6;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0c0c0c] text-neutral-100 font-sans antialiased;
+  }
+}
+
+.mc-card {
+  @apply bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 backdrop-blur-md transition-all duration-300;
+}
+
+.mc-card:hover {
+  @apply border-neutral-700 bg-neutral-900/80 -translate-y-1 shadow-2xl shadow-red-500/10;
+}
+
+.mc-button {
+  @apply px-6 py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2;
+}
+
+.mc-button-primary {
+  @apply bg-mc-red text-white hover:bg-red-400;
+}
+
+.mc-button-secondary {
+  @apply bg-neutral-800 text-white hover:bg-neutral-700;
+}
+
+.pixel-grid {
+  background-image: radial-gradient(circle at 1px 1px, #ffffff05 1px, transparent 0);
+  background-size: 40px 40px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #606060;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+}
+
+@keyframes rainbow-shadow {
+  0% {
+    border-color: #ef4444;
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.9), inset 0 0 15px rgba(239, 68, 68, 0.4);
+  }
+  20% {
+    border-color: #f59e0b;
+    box-shadow: 0 0 35px rgba(245, 158, 11, 0.9), inset 0 0 15px rgba(245, 158, 11, 0.4);
+  }
+  40% {
+    border-color: #10b981;
+    box-shadow: 0 0 35px rgba(16, 185, 129, 0.9), inset 0 0 15px rgba(16, 185, 129, 0.4);
+  }
+  60% {
+    border-color: #3b82f6;
+    box-shadow: 0 0 35px rgba(59, 130, 246, 0.9), inset 0 0 15px rgba(59, 130, 246, 0.4);
+  }
+  80% {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 35px rgba(139, 92, 246, 0.9), inset 0 0 15px rgba(139, 92, 246, 0.4);
+  }
+  100% {
+    border-color: #ef4444;
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.9), inset 0 0 15px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.rainbow-glow {
+  animation: rainbow-shadow 5s linear infinite;
+  border-width: 2px;
+  border-style: solid;
+}
+

@@ -1,0 +1,352 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Profile of a community member including their Minecraft username and online status",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "The name the user wants to display"
+        },
+        "minecraftUsername": {
+          "type": "string",
+          "description": "The Minecraft username for fetching the skin"
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Manual status toggle"
+        },
+        "currentServer": {
+          "type": "string",
+          "enum": ["none", "pvp", "survival"],
+          "description": "The server the user is currently playing on"
+        },
+        "customSkin": {
+          "type": "string",
+          "description": "Base64 or URL of a custom skin image"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Member", "VIP", "Mod", "Admin"],
+          "description": "User role for the community"
+        },
+        "xp": {
+          "type": "integer"
+        },
+        "coins": {
+          "type": "integer"
+        },
+        "isShadowMuted": {
+          "type": "boolean"
+        },
+        "isInvisible": {
+          "type": "boolean"
+        },
+        "purchasedRank": {
+          "type": "string",
+          "description": "Secondary rank purchased from the shop"
+        }
+      },
+      "required": ["displayName", "minecraftUsername", "isOnline", "currentServer", "updatedAt", "userId"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A message sent in the global community chat",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The message content"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the sender"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the sender at the time of sending"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role of the sender"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tempId": {
+          "type": "string",
+          "description": "Temporary ID for optimistic updates"
+        }
+      },
+      "required": ["text", "userId", "displayName", "createdAt"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "A player currently online on the server",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "The Minecraft username"
+        },
+        "server": {
+          "type": "string",
+          "enum": ["pvp", "survival"],
+          "description": "The server the player is on"
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last time the player was confirmed online"
+        }
+      },
+      "required": ["username", "server", "lastSeen"]
+    },
+    "ServerStatus": {
+      "title": "Server Status",
+      "description": "Global status information for a server",
+      "type": "object",
+      "properties": {
+        "online": {
+          "type": "boolean"
+        },
+        "playerCount": {
+          "type": "integer"
+        },
+        "maxPlayers": {
+          "type": "integer"
+        }
+      },
+      "required": ["online", "playerCount"]
+    },
+    "Clan": {
+      "title": "Clan",
+      "description": "A community clan",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tag": { "type": "string" },
+        "description": { "type": "string" },
+        "leaderId": { "type": "string" },
+        "logo": { "type": "string" },
+        "announcement": { "type": "string" },
+        "level": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "totalKills": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "memberCount": { "type": "integer" }
+      },
+      "required": ["name", "tag", "leaderId", "createdAt", "memberCount", "level", "xp", "totalKills"]
+    },
+    "ClanMember": {
+      "title": "Clan Member",
+      "description": "A member of a clan",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["Leader", "Officer", "Member"] },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "xpContribution": { "type": "integer" }
+      },
+      "required": ["userId", "role", "joinedAt", "xpContribution"]
+    },
+    "ClanJoinRequest": {
+      "title": "Clan Join Request",
+      "description": "A request to join a clan",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "minecraftUsername": { "type": "string" },
+        "message": { "type": "string" },
+        "requestedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "minecraftUsername", "requestedAt"]
+    },
+    "ClanQuest": {
+      "title": "Clan Quest",
+      "description": "A daily challenge for the clan",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "goal": { "type": "integer" },
+        "current": { "type": "integer" },
+        "rewardXp": { "type": "integer" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["title", "goal", "current", "rewardXp", "completed"]
+    },
+    "NewsItem": {
+      "title": "News Item",
+      "description": "A news update for the community",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "text", "createdAt"]
+    },
+    "Poll": {
+      "title": "Poll",
+      "description": "A community poll",
+      "type": "object",
+      "properties": {
+        "question": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "options": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "required": ["question", "isActive", "createdAt", "options"]
+    },
+    "ShopItem": {
+      "title": "Shop Item",
+      "description": "An item available in the global shop",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "integer" },
+        "category": { "type": "string", "enum": ["Ränge", "Items", "Vorteile", "Boxen"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "price", "category", "isActive", "createdAt"]
+    },
+    "ShopLog": {
+      "title": "Shop Log",
+      "description": "A record of a shop purchase",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "price": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "itemId", "itemName", "price", "createdAt"]
+    },
+    "SharedBackground": {
+      "title": "Shared Background",
+      "description": "Custom background wallpaper shared by a community player",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string", "description": "URL of the wallpaper image" },
+        "title": { "type": "string", "description": "Title/Name of the wallpaper" },
+        "uploadedBy": { "type": "string", "description": "Minecraft username or player display name" },
+        "userId": { "type": "string", "description": "Firestore ID of the uploader" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["imageUrl", "title", "uploadedBy", "userId", "createdAt"]
+    },
+    "SharedWeather": {
+      "title": "Shared Weather",
+      "description": "Custom meteorological weather shared by a community player",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the custom weather" },
+        "type": { "type": "string", "enum": ["rain", "snow", "leaves"], "description": "The visual particle type" },
+        "colors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of Hex colors for the particles"
+        },
+        "speedMultiplier": { "type": "string", "enum": ["gentle", "moderate", "tempest"], "description": "Speed preset" },
+        "particleScale": { "type": "string", "enum": ["fine", "medium", "chunk"], "description": "Particle scale preset" },
+        "uploadedBy": { "type": "string", "description": "Minecraft username or display name" },
+        "userId": { "type": "string", "description": "Firestore ID of the creator" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "particleCount": { "type": "integer", "description": "Custom density of particles" },
+        "windDrift": { "type": "number", "description": "Custom horizontal wind sway force" },
+        "gravityMult": { "type": "number", "description": "Custom vertical falling speed multiplier" },
+        "particleShape": { "type": "string", "description": "The visual rendering style of particles (pixels, circles, emojis)" },
+        "emojiString": { "type": "string", "description": "Custom character symbols list" },
+        "glow": { "type": "boolean", "description": "Enable glowing canvas effect" },
+        "swayAmplitude": { "type": "number", "description": "Intensity of the horizontal floating wave sway" },
+        "enableLightning": { "type": "boolean", "description": "Enable flash storm effect" },
+        "lightningFrequency": { "type": "integer", "description": "Frequency scale of storm flashes" },
+        "lightningColor": { "type": "string", "description": "Hex color of storm lightning" },
+        "enableSplashes": { "type": "boolean", "description": "Spawn pixel splash effects at the floor" },
+        "splashSize": { "type": "number", "description": "The scale of the ground splash ripples" },
+        "trailLength": { "type": "number", "description": "Draw atmospheric translucent trail streaks behind particles" },
+        "overlayColor": { "type": "string", "description": "Hex environmental shade overlay color" },
+        "overlayOpacity": { "type": "number", "description": "Opacity of environmental overlay tint" }
+      },
+      "required": ["title", "type", "colors", "speedMultiplier", "particleScale", "uploadedBy", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "shared_backgrounds/{bgId}": {
+      "schema": "SharedBackground",
+      "description": "Wallpapers uploaded and shared by community players"
+    },
+    "shared_weathers/{weatherId}": {
+      "schema": "SharedWeather",
+      "description": "Meteorological custom environments created and shared by community players"
+    },
+    "user_profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "Registered community members profile data"
+    },
+    "online_players/{playerId}": {
+      "schema": "Player",
+      "description": "Collection of currently online players"
+    },
+    "server_status/{serverId}": {
+      "schema": "ServerStatus",
+      "description": "Status information for each server (pvp, survival)"
+    },
+    "chat_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Global community chat messages"
+    },
+    "clans/{clanId}": {
+      "schema": "Clan",
+      "description": "Minecraft clans"
+    },
+    "clans/{clanId}/members/{userId}": {
+      "schema": "ClanMember",
+      "description": "Members of a specific clan"
+    },
+    "clans/{clanId}/chat/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Private clan chat messages"
+    },
+    "clans/{clanId}/requests/{userId}": {
+      "schema": "ClanJoinRequest",
+      "description": "Pending join requests for a clan"
+    },
+    "clans/{clanId}/quests/{questId}": {
+      "schema": "ClanQuest",
+      "description": "Active clan challenges"
+    },
+    "news/{newsId}": {
+      "schema": "NewsItem",
+      "description": "General community news"
+    },
+    "polls/{pollId}": {
+      "schema": "Poll",
+      "description": "Community polls"
+    },
+    "shop/{itemId}": {
+      "schema": "ShopItem",
+      "description": "Items available in the global shop"
+    },
+    "shop_logs/{logId}": {
+      "schema": "ShopLog",
+      "description": "Admin logs for shop purchases"
+    }
+  }
+}

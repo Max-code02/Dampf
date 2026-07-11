@@ -1,0 +1,6 @@
+{
+  "name": "Bester Minecraft Realms",
+  "description": "Das ultimative Dashboard für die Bester Minecraft Realms Community mit Realm-Codes, Discord-Anbindung (Login & Status-Widgets) und dem Deep Mines Minigame.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
