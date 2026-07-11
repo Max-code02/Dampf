@@ -285,6 +285,25 @@
         "overlayOpacity": { "type": "number", "description": "Opacity of environmental overlay tint" }
       },
       "required": ["title", "type", "colors", "speedMultiplier", "particleScale", "uploadedBy", "userId", "createdAt"]
+    },
+    "Suggestion": {
+      "title": "Suggestion",
+      "description": "A community suggestion/idea",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "planned", "in-progress", "completed", "declined"] },
+        "upvotes": { "type": "integer" },
+        "upvotedBy": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["title", "description", "authorId", "authorName", "createdAt", "status", "upvotes", "upvotedBy"]
     }
   },
   "firestore": {
@@ -347,6 +366,10 @@
     "shop_logs/{logId}": {
       "schema": "ShopLog",
       "description": "Admin logs for shop purchases"
+    },
+    "suggestions/{suggestionId}": {
+      "schema": "Suggestion",
+      "description": "Suggestions submitted by community members"
     }
   }
 }

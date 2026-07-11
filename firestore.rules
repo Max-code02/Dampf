@@ -361,5 +361,39 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow update: if false;
     }
+
+    // Suggestion Validation
+    function isValidSuggestion(data) {
+      return data.keys().hasAll(['title', 'description', 'authorId', 'authorName', 'createdAt', 'status', 'upvotes', 'upvotedBy']) &&
+             data.keys().size() == 8 &&
+             data.title is string && data.title.size() <= 100 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.authorId is string &&
+             data.authorName is string && data.authorName.size() <= 64 &&
+             (data.createdAt == request.time || data.createdAt is timestamp) &&
+             data.status in ['pending', 'planned', 'in-progress', 'completed', 'declined'] &&
+             data.upvotes is int &&
+             data.upvotedBy is list;
+    }
+
+    match /suggestions/{suggestionId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSuggestion(incoming()) && incoming().authorId == request.auth.uid && incoming().status == 'pending' && incoming().upvotes == 1 && incoming().upvotedBy.size() == 1 && incoming().upvotedBy[0] == request.auth.uid;
+      allow delete: if isAdmin();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy']) &&
+          incoming().title == existing().title &&
+          incoming().description == existing().description &&
+          incoming().authorId == existing().authorId &&
+          incoming().authorName == existing().authorName &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().status == existing().status &&
+          incoming().upvotes is int &&
+          incoming().upvotedBy is list
+        )
+      );
+    }
   }
 }
