@@ -849,6 +849,7 @@ interface ChatMessage {
   purchasedRank?: string;
   localTimestamp?: number;
   channel?: string;
+  imageUrl?: string;
 }
 
 interface NewsItem {
@@ -2177,16 +2178,20 @@ export default function App() {
     });
   }, [chatMessages, localMessages, hasQuotaExceeded]);
 
-  const [chatChannel, setChatChannel] = useState<'allgemein' | 'quiz'>('allgemein');
+  const [chatChannel, setChatChannel] = useState<'allgemein' | 'quiz' | 'bilder'>('allgemein');
 
   const filteredMessages = useMemo(() => {
     return combinedMessages.filter(msg => {
       const text = msg.text || '';
       const isQuizRelated = msg.channel === 'quiz' || msg.userId === 'quiz_bot' || text.includes('QUIZFRAGE') || text.includes('Richtig!') || text.includes('gelöst');
+      const isImage = !!msg.imageUrl || msg.channel === 'bilder';
+      
       if (chatChannel === 'quiz') {
         return isQuizRelated;
+      } else if (chatChannel === 'bilder') {
+        return isImage;
       } else {
-        return !isQuizRelated && msg.channel !== 'quiz';
+        return !isQuizRelated && msg.channel !== 'quiz' && !isImage && msg.channel !== 'bilder';
       }
     });
   }, [combinedMessages, chatChannel]);
@@ -10926,11 +10931,11 @@ export default function App() {
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold flex items-center gap-2">
-                  <MessageCircle className={`${chatChannel === 'quiz' ? 'text-mc-gold' : 'text-mc-red'}`} />
-                  {chatChannel === 'quiz' ? 'Quiz-Chatroom' : 'Community Chat'}
+                  <MessageCircle className={`${chatChannel === 'quiz' ? 'text-mc-gold' : chatChannel === 'bilder' ? 'text-blue-500' : 'text-mc-red'}`} />
+                  {chatChannel === 'quiz' ? 'Quiz-Chatroom' : chatChannel === 'bilder' ? 'Bilder-Galerie' : 'Community Chat'}
                 </h3>
                 <p className="text-neutral-500 text-xs">
-                  {chatChannel === 'quiz' ? 'Löse Fragen und erhalte Coins!' : 'Schreibe mit anderen Spielern'}
+                  {chatChannel === 'quiz' ? 'Löse Fragen und erhalte Coins!' : chatChannel === 'bilder' ? 'Teile Bilder und Memes mit der Community' : 'Schreibe mit anderen Spielern'}
                 </p>
               </div>
               <button 
@@ -10947,7 +10952,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setChatChannel('allgemein')}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest transition-all rounded-xl border flex items-center justify-center gap-2 ${
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all rounded-xl border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${
                   chatChannel === 'allgemein'
                     ? 'bg-mc-red/25 border-mc-red text-white shadow-[0_0_20px_rgba(255,0,0,0.2)] font-black'
                     : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5 font-bold'
@@ -10959,17 +10964,29 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setChatChannel('quiz')}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest transition-all rounded-xl border flex items-center justify-center gap-2 relative ${
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all rounded-xl border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 relative ${
                   chatChannel === 'quiz'
                     ? 'bg-mc-gold/25 border-mc-gold text-mc-gold shadow-[0_0_20px_rgba(255,170,0,0.2)] font-black'
                     : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5 font-bold'
                 }`}
               >
                 <Sparkles size={14} />
-                Quiz-Chat
+                Quiz
                 {activeQuiz?.active && (
                   <span className="absolute top-1.5 right-3 w-2 h-2 rounded-full bg-mc-gold animate-pulse border border-black" />
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChatChannel('bilder')}
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all rounded-xl border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${
+                  chatChannel === 'bilder'
+                    ? 'bg-blue-500/25 border-blue-500 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)] font-black'
+                    : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5 font-bold'
+                }`}
+              >
+                <ImageIcon size={14} />
+                Bilder
               </button>
             </div>
 
@@ -11093,6 +11110,11 @@ export default function App() {
                               }
                               return cleanText;
                             })()}
+                            {msg.imageUrl && (
+                              <div className="mt-2 mb-1">
+                                <img src={msg.imageUrl} alt="Chat Upload" className="max-w-full rounded-md shadow-sm border border-white/10" loading="lazy" />
+                              </div>
+                            )}
                             {msg.isLocal && (
                               <motion.div 
                                 animate={{ rotate: 360 }}
@@ -11117,7 +11139,7 @@ export default function App() {
                      <MessageCircle size={32} />
                    </div>
                    <p className="text-xs italic">
-                     {chatChannel === 'quiz' ? 'Noch keine Quiz-Antworten gesendet...' : 'Noch keine Nachrichten... fang an zu schreiben!'}
+                     {chatChannel === 'quiz' ? 'Noch keine Quiz-Antworten gesendet...' : chatChannel === 'bilder' ? 'Noch keine Bilder hochgeladen... teile dein erstes!' : 'Noch keine Nachrichten... fang an zu schreiben!'}
                    </p>
                 </div>
               )}
@@ -11176,6 +11198,43 @@ export default function App() {
                       <Command size={20} />
                     </button>
                     <input 
+                      type="file"
+                      accept="image/*"
+                      id="chat-image-upload"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file && user) {
+                           try {
+                             // Assuming triggerToast is in scope. It probably is.
+                             const base64 = await compressAndResizeImage(file, 800, 800, 0.6);
+                             await addDoc(collection(db, 'chat_messages'), {
+                               text: '',
+                               imageUrl: base64,
+                               userId: user.uid,
+                               displayName: myProfile?.displayName || user.displayName || 'Unknown',
+                               role: myProfile?.role || 'Member',
+                               purchasedRank: myProfile?.purchasedRank || 'undefined',
+                               channel: chatChannel,
+                               createdAt: serverTimestamp()
+                             });
+                             // Reset input so we can select the same file again if needed
+                             e.target.value = '';
+                           } catch (err) {
+                             console.error("Image upload error", err);
+                           }
+                        }
+                      }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => document.getElementById('chat-image-upload')?.click()}
+                      className="p-3 rounded-xl transition-all border bg-neutral-900 text-neutral-500 border-neutral-800 hover:border-neutral-700 hover:text-white"
+                      title="Bild hochladen"
+                    >
+                      <ImageIcon size={20} />
+                    </button>
+                    <input 
                       type="text" 
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
@@ -11229,14 +11288,6 @@ export default function App() {
               }
             </p>
             <div className="flex flex-wrap gap-4 justify-center md:justify-start">
-              <button 
-                onClick={() => {
-                  window.location.href = "https://dampf.mypi.co/?play=true";
-                }}
-                className="mc-button bg-emerald-500 text-black font-extrabold hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 group px-6 py-3 rounded-xl hover:scale-105"
-              >
-                <span>Direkt zum Spiel 🎮</span>
-              </button>
               {(false && (myProfile?.role === 'Owner' || myProfile?.role === 'Root' || isOwner || isSuperAdmin)) && (
                 <button 
                   onClick={() => {
@@ -11256,9 +11307,9 @@ export default function App() {
               )}
               <button 
                 onClick={() => {
-                  const directLink = "https://dampf.mypi.co/?play=true";
+                  const directLink = "https://dampf.mypi.co/";
                   navigator.clipboard.writeText(directLink);
-                  triggerToast('quest', 'LINK KOPIERT 📋', 'Der Direktspiel-Link (https://dampf.mypi.co/?play=true) wurde kopiert!');
+                  triggerToast('quest', 'LINK KOPIERT 📋', 'Der Direktspiel-Link (https://dampf.mypi.co/) wurde kopiert!');
                 }}
                 className="mc-button mc-button-secondary flex items-center gap-2 px-6 py-3 rounded-xl border border-neutral-800 hover:border-emerald-500 hover:text-emerald-400 transition-all"
                 title="Diesen Link kopieren oder Lesezeichen für direkten Spielstart erstellen!"
