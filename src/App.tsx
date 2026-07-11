@@ -3190,13 +3190,36 @@ export default function App() {
       setBotpressOpen(true);
     }
     
-    // Auto-launch Suggestions if path contains vorschlaege/vorschläge or hash is #vorschlaege
+    // Auto-launch Suggestions if path, query params, or hash contains vorschlaege/vorschläge/vorschl
+    let pathnameDecoded = '';
+    let searchDecoded = '';
+    let hashDecoded = '';
+    try {
+      pathnameDecoded = decodeURIComponent(window.location.pathname).toLowerCase();
+    } catch (_) {
+      pathnameDecoded = window.location.pathname.toLowerCase();
+    }
+    try {
+      searchDecoded = decodeURIComponent(window.location.search).toLowerCase();
+    } catch (_) {
+      searchDecoded = window.location.search.toLowerCase();
+    }
+    try {
+      hashDecoded = decodeURIComponent(window.location.hash).toLowerCase();
+    } catch (_) {
+      hashDecoded = window.location.hash.toLowerCase();
+    }
+
     if (
-      window.location.pathname.includes('vorschlaege') || 
-      window.location.pathname.includes('vorschl%C3%A4ge') || 
-      window.location.pathname.includes('vorschläge') || 
-      hash === '#vorschlaege' || 
-      hash === '#vorschläge'
+      pathnameDecoded.includes('vorschlaege') || 
+      pathnameDecoded.includes('vorschläge') || 
+      pathnameDecoded.includes('vorschl') || 
+      searchDecoded.includes('vorschlaege') || 
+      searchDecoded.includes('vorschläge') || 
+      searchDecoded.includes('vorschl') || 
+      hashDecoded.includes('vorschlaege') || 
+      hashDecoded.includes('vorschläge') || 
+      hashDecoded.includes('vorschl')
     ) {
       setSuggestionsOpen(true);
       fetchSuggestions();
