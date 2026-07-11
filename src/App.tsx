@@ -88,6 +88,8 @@ import {
   Leaf,
   Compass,
   SunDim,
+  Lightbulb,
+  ChevronUp,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { QuizArenaView } from './components/QuizArenaView';
@@ -870,6 +872,18 @@ interface Poll {
   options: PollOption[];
   isActive: boolean;
   createdAt: any;
+}
+
+interface Suggestion {
+  id: string;
+  title: string;
+  description: string;
+  authorId: string;
+  authorName: string;
+  createdAt: any;
+  status: 'pending' | 'planned' | 'in-progress' | 'completed' | 'declined';
+  upvotes: number;
+  upvotedBy: string[];
 }
 
 interface ShopItem {
@@ -2203,6 +2217,8 @@ export default function App() {
   const [shopLogs, setShopLogs] = useState<any[]>([]);
   const [myPurchases, setMyPurchases] = useState<any[]>([]);
   const [shopOpen, setShopOpen] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [devLabsOpen, setDevLabsOpen] = useState(false);
   const [devLabsTab, setDevLabsTab] = useState<'rust' | 'flutter'>('rust');
   const [showLogs, setShowLogs] = useState(false);
@@ -2505,6 +2521,22 @@ export default function App() {
       setPolls(pollsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Poll)));
     } catch (err: any) {
       if (err.message.includes('Quota')) setHasQuotaExceeded(true);
+    }
+  };
+
+  const fetchSuggestions = async () => {
+    if (hasQuotaExceeded) return;
+    try {
+      const suggestSnap = await getDocs(query(collection(db, 'suggestions'), orderBy('upvotes', 'desc'), limit(50)));
+      setSuggestions(suggestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion)));
+    } catch (err: any) {
+      if (err.message.includes('Quota')) setHasQuotaExceeded(true);
+      // Fallback if index on upvotes doesn't exist yet
+      try {
+        const fallbackSnap = await getDocs(query(collection(db, 'suggestions'), orderBy('createdAt', 'desc'), limit(50)));
+        const sorted = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion)).sort((a, b) => b.upvotes - a.upvotes);
+        setSuggestions(sorted);
+      } catch (err2: any) {}
     }
   };
 
@@ -3156,6 +3188,18 @@ export default function App() {
       hash === '#support'
     ) {
       setBotpressOpen(true);
+    }
+    
+    // Auto-launch Suggestions if path contains vorschlaege/vorschläge or hash is #vorschlaege
+    if (
+      window.location.pathname.includes('vorschlaege') || 
+      window.location.pathname.includes('vorschl%C3%A4ge') || 
+      window.location.pathname.includes('vorschläge') || 
+      hash === '#vorschlaege' || 
+      hash === '#vorschläge'
+    ) {
+      setSuggestionsOpen(true);
+      fetchSuggestions();
     }
 
     // Check for clan invitation link ?invite=clan_id
@@ -4064,7 +4108,8 @@ export default function App() {
   }, []);
 
   const [offlineReport, setOfflineReport] = useState<{ seconds: number; coins: number; xp: number } | null>(null);
-  const isAnyOverlayOpen = chatOpen || shopOpen || newsOpen || pollsOpen || botpressOpen || showAdmin || showLoginModal || showProfileModal || showMiningModal || leaderboardOpen || (openingBox as any).isOpen || isAiOpen || offlineReport !== null || devLabsOpen || showClientsModal || showClashComingSoon || showSplash;
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const isAnyOverlayOpen = chatOpen || shopOpen || newsOpen || pollsOpen || suggestionsOpen || botpressOpen || showAdmin || showLoginModal || showProfileModal || showMiningModal || leaderboardOpen || (openingBox as any).isOpen || isAiOpen || offlineReport !== null || devLabsOpen || showClientsModal || showClashComingSoon || showSplash || fullscreenImage !== null;
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
 
@@ -4426,6 +4471,58 @@ export default function App() {
       console.log(`Message ${msgId} edited by admin.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `chat_messages/${msgId}`);
+    }
+  };
+
+  // Suggestion Management
+  const handleSuggestionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return setShowLoginModal(true);
+    const form = e.target as HTMLFormElement;
+    const title = (form.elements.namedItem('title') as HTMLInputElement).value;
+    const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
+
+    if (!title.trim() || !description.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'suggestions'), {
+        title,
+        description,
+        authorId: user.uid,
+        authorName: myProfile?.displayName || user.displayName || 'Unknown',
+        createdAt: serverTimestamp(),
+        status: 'pending',
+        upvotes: 1,
+        upvotedBy: [user.uid]
+      });
+      form.reset();
+      fetchSuggestions();
+      // Optional: alert or toast
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleUpvote = async (suggestionId: string, currentUpvotedBy: string[]) => {
+    if (!user) return setShowLoginModal(true);
+    try {
+      const isUpvoted = (currentUpvotedBy || []).includes(user.uid);
+      const newUpvotedBy = isUpvoted 
+        ? (currentUpvotedBy || []).filter(id => id !== user.uid)
+        : [...(currentUpvotedBy || []), user.uid];
+      
+      const newUpvotes = newUpvotedBy.length;
+      
+      // Optimitic update
+      setSuggestions(prev => prev.map(s => s.id === suggestionId ? { ...s, upvotes: newUpvotes, upvotedBy: newUpvotedBy } : s));
+      
+      await setDoc(doc(db, 'suggestions', suggestionId), {
+        upvotes: newUpvotes,
+        upvotedBy: newUpvotedBy
+      }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      fetchSuggestions(); // revert
     }
   };
 
@@ -9742,6 +9839,7 @@ export default function App() {
                       setNewsOpen(true);
                       fetchNews();
                       setPollsOpen(false);
+                      setSuggestionsOpen(false);
                       setChatOpen(false);
                       setShopOpen(false);
                       setShowMiningModal(false);
@@ -9752,6 +9850,36 @@ export default function App() {
                     title="News-Feed"
                   >
                     <Newspaper size={20} />
+                  </button>
+                </motion.div>
+
+                {/* 4.5 Vorschläge */}
+                <motion.div
+                  variants={{
+                    hidden: { opacity: 0, y: 15, scale: 0.8 },
+                    visible: { opacity: 1, y: 0, scale: 1 }
+                  }}
+                  className="flex items-center gap-3 pointer-events-auto group/item"
+                >
+                  <span className="bg-black/95 text-neutral-200 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-neutral-800 shadow-xl opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 select-none">
+                    Vorschläge
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSuggestionsOpen(true);
+                      fetchSuggestions();
+                      setNewsOpen(false);
+                      setPollsOpen(false);
+                      setChatOpen(false);
+                      setShopOpen(false);
+                      setShowMiningModal(false);
+                      setLeaderboardOpen(false);
+                      setIsFabMenuOpen(false);
+                    }}
+                    className="w-12 h-12 rounded-xl bg-black border border-neutral-800 text-white flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 hover:border-blue-400 transition-all"
+                    title="Vorschläge"
+                  >
+                    <Lightbulb size={20} />
                   </button>
                 </motion.div>
 
@@ -10079,6 +10207,145 @@ export default function App() {
 
       {/* Botpress Info-Bot Panel */}
       <InfoBotPanel isOpen={botpressOpen} onClose={() => setBotpressOpen(false)} />
+
+      {/* Suggestions Drawer */}
+      <AnimatePresence>
+        {suggestionsOpen && (
+          <motion.div 
+            key="suggestions-drawer"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            className="fixed inset-y-0 right-0 w-full sm:w-[450px] bg-black/95 backdrop-blur-xl z-[70] border-l border-neutral-800 shadow-2xl flex flex-col pt-20"
+          >
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Lightbulb className="text-blue-400" />
+                  Community Vorschläge
+                </h3>
+                <p className="text-neutral-500 text-xs">
+                  Teile deine Ideen und vote für die besten!
+                </p>
+              </div>
+              <button 
+                onClick={() => setSuggestionsOpen(false)}
+                className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
+                title="Schließen"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+              <div className="bg-neutral-900/50 p-4 rounded-xl border border-neutral-800 mb-6">
+                <h4 className="text-sm font-bold text-white mb-2">Neuen Vorschlag einreichen</h4>
+                <form onSubmit={handleSuggestionSubmit} className="space-y-3">
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    placeholder="Kurzer, prägnanter Titel..."
+                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors"
+                  />
+                  <textarea
+                    name="description"
+                    required
+                    placeholder="Beschreibe deine Idee im Detail..."
+                    rows={3}
+                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors resize-none"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors text-sm"
+                  >
+                    Vorschlag senden
+                  </button>
+                </form>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Aktuelle Vorschläge</h4>
+                {suggestions.map((sug) => (
+                  <div key={sug.id} className="bg-black border border-neutral-800 rounded-xl p-4 flex gap-4 hover:border-neutral-700 transition-colors group">
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => toggleUpvote(sug.id, sug.upvotedBy)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          (sug.upvotedBy || []).includes(user?.uid || '')
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800 border border-transparent'
+                        }`}
+                      >
+                        <ChevronUp size={20} className={(sug.upvotedBy || []).includes(user?.uid || '') ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''} />
+                      </button>
+                      <span className={`font-black text-sm ${(sug.upvotedBy || []).includes(user?.uid || '') ? 'text-blue-400' : 'text-neutral-300'}`}>
+                        {sug.upvotes || 0}
+                      </span>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h5 className="font-bold text-sm text-white truncate" title={sug.title}>{sug.title}</h5>
+                        {sug.status && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0 ${
+                            sug.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                            sug.status === 'in-progress' ? 'bg-blue-500/20 text-blue-400' :
+                            sug.status === 'planned' ? 'bg-purple-500/20 text-purple-400' :
+                            sug.status === 'declined' ? 'bg-red-500/20 text-red-400' :
+                            'bg-neutral-800 text-neutral-400'
+                          }`}>
+                            {sug.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-neutral-400 whitespace-pre-wrap break-words leading-relaxed">{sug.description}</p>
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-[10px] text-neutral-500">
+                          Von <span className="text-neutral-300">{sug.authorName}</span>
+                        </p>
+                        {isAdmin && (
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                            <select
+                              value={sug.status || 'pending'}
+                              onChange={(e) => setDoc(doc(db, 'suggestions', sug.id), { status: e.target.value }, { merge: true }).then(fetchSuggestions)}
+                              className="text-[9px] bg-neutral-900 border border-neutral-700 rounded px-1 text-neutral-300 outline-none"
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="planned">Geplant</option>
+                              <option value="in-progress">In Arbeit</option>
+                              <option value="completed">Fertig</option>
+                              <option value="declined">Abgelehnt</option>
+                            </select>
+                            <button
+                              onClick={async () => {
+                                if (confirm("Vorschlag löschen?")) {
+                                  await deleteDoc(doc(db, 'suggestions', sug.id));
+                                  fetchSuggestions();
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-400 p-0.5"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {suggestions.length === 0 && (
+                  <div className="text-center py-10">
+                    <Lightbulb size={32} className="mx-auto text-neutral-700 mb-3" />
+                    <p className="text-neutral-500 text-sm italic">Noch keine Vorschläge vorhanden.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Shop Drawer */}
       <AnimatePresence>
@@ -11112,7 +11379,13 @@ export default function App() {
                             })()}
                             {msg.imageUrl && (
                               <div className="mt-2 mb-1">
-                                <img src={msg.imageUrl} alt="Chat Upload" className="max-w-full rounded-md shadow-sm border border-white/10" loading="lazy" />
+                                <img 
+                                  src={msg.imageUrl} 
+                                  alt="Chat Upload" 
+                                  className="w-full max-w-[300px] sm:max-w-[400px] rounded-md shadow-sm border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity" 
+                                  loading="lazy"
+                                  onClick={() => setFullscreenImage(msg.imageUrl || null)}
+                                />
                               </div>
                             )}
                             {msg.isLocal && (
@@ -12605,6 +12878,51 @@ export default function App() {
           </section>
         )}
 
+        {/* Community & Feedback Section */}
+        <section className="mb-12 py-8 border-t border-neutral-800/50">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <Lightbulb className="text-blue-400" size={32} />
+              <h2 className="text-3xl font-bold">Community & Feedback</h2>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div 
+              onClick={() => {
+                setSuggestionsOpen(true);
+                fetchSuggestions();
+                setNewsOpen(false);
+                setPollsOpen(false);
+                setChatOpen(false);
+                setShopOpen(false);
+                setShowMiningModal(false);
+                setLeaderboardOpen(false);
+              }}
+              className="mc-card cursor-pointer hover:border-blue-500/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)] transition-all p-6 relative overflow-hidden group border border-neutral-800/60"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-xl group-hover:bg-blue-500/10 rounded-full transition-all" />
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
+                    <Lightbulb size={28} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 border border-blue-500/30 px-2 py-1 rounded bg-blue-500/10">
+                    BETA
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold mb-2">Vorschlags-System</h3>
+                <p className="text-neutral-400 text-sm mb-6 max-w-sm">
+                  Hast du eine gute Idee für den Server? Reiche deinen Vorschlag ein oder vote für die Ideen der Community.
+                </p>
+                <div className="flex items-center text-blue-400 text-xs font-bold uppercase tracking-widest group-hover:gap-2 transition-all">
+                  Zu den Vorschlägen <ChevronRight size={14} className="ml-1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Server Rules Section */}
         <section className="mb-12 py-8 border-t border-neutral-800/50">
           <div className="flex items-center gap-3 mb-8">
@@ -13309,6 +13627,37 @@ export default function App() {
           >
             <CheckCircle2 size={20} />
             Erfolgreich kopiert!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Image Lightbox */}
+      <AnimatePresence>
+        {fullscreenImage && (
+          <motion.div
+            key="fullscreen-image"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[11000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-8 cursor-zoom-out"
+            onClick={() => setFullscreenImage(null)}
+          >
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              src={fullscreenImage}
+              alt="Fullscreen Chat Upload"
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()} // Prevent clicking the image itself from closing it, optional, but useful if we add buttons inside later. Actually let's let clicking it close it too since it's a lightbox.
+            />
+            <button 
+              className="absolute top-6 right-6 p-3 bg-black/50 hover:bg-white/10 rounded-full text-white backdrop-blur-md transition-colors"
+              onClick={() => setFullscreenImage(null)}
+            >
+              <X size={24} />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
