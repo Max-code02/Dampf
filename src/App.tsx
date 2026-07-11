@@ -133,8 +133,8 @@ if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
 }
 
 const REALM_CODES = {
-  PVP: 'https://discord.gg/2XrnqReeE',
-  SURVIVAL: 'https://discord.gg/2XrnqReeE'
+  PVP: 'https://discord.com/invite/2XrnqReeE',
+  SURVIVAL: 'https://discord.com/invite/2XrnqReeE'
 };
 
 const compressAndResizeImage = (file: File, maxWidth = 1280, maxHeight = 720, quality = 0.75): Promise<string> => {
@@ -721,7 +721,7 @@ const MountainPets = ({ playAppSound }: { playAppSound: any }) => {
   );
 };
 
-const DISCORD_URL = 'https://discord.gg/2XrnqReeE';
+const DISCORD_URL = 'https://discord.com/invite/2XrnqReeE';
 
 const SpruceTree = ({ className, height = 32, color }: { className?: string; height?: number; color: string }) => {
   return (
@@ -1119,8 +1119,8 @@ export default function App() {
   const [hasQuotaExceeded, setHasQuotaExceeded] = useState(false);
 
   const [realmCodes, setRealmCodes] = useState({
-    PVP: 'https://discord.gg/2XrnqReeE',
-    SURVIVAL: 'https://discord.gg/2XrnqReeE'
+    PVP: 'https://discord.com/invite/2XrnqReeE',
+    SURVIVAL: 'https://discord.com/invite/2XrnqReeE'
   });
   const [copied, setCopied] = useState<string | null>(null);
   const [user, setUser] = useState<User| null>(null);
@@ -13152,16 +13152,19 @@ export default function App() {
 
 
 
-      <footer className="relative z-10 border-t border-neutral-800/50 py-12 bg-black/20">
+      <footer className="relative z-10 border-t border-neutral-800/50 pt-12 pb-40 md:pb-28 bg-black/20">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-3 opacity-30">
             <Gamepad2 size={24} />
             <span className="font-bold tracking-tight">BESTER MINECRAFT REALMS &copy; 2026</span>
           </div>
-          <div className="flex gap-8 text-sm text-neutral-500">
-            <a href="#" className="hover:text-white transition-colors">Discord</a>
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Imprint</a>
+          <div className="flex flex-col items-center md:items-end gap-2 text-sm text-neutral-500">
+            <div className="flex gap-8">
+              <a href="#" className="hover:text-white transition-colors">Discord</a>
+              <a href="#" className="hover:text-white transition-colors">Privacy</a>
+              <a href="#" className="hover:text-white transition-colors">Imprint</a>
+            </div>
+            <span className="text-xs opacity-50 font-mono mt-2 relative z-50">v1.21.5</span>
           </div>
         </div>
       </footer>
@@ -13316,6 +13319,15 @@ export default function App() {
                   className="h-full bg-gradient-to-r from-mc-red via-mc-gold to-mc-red"
                 />
               </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              className="absolute bottom-12 left-1/2 -translate-x-1/2 text-xs font-mono text-neutral-500 tracking-widest z-50"
+            >
+              v1.21.5
             </motion.div>
           </motion.div>
         )}
