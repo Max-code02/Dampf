@@ -301,9 +301,28 @@
         "upvotedBy": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "downvotes": { "type": "integer" },
+        "downvotedBy": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "comments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "authorId": { "type": "string" },
+              "authorName": { "type": "string" },
+              "text": { "type": "string", "maxLength": 1000 },
+              "createdAt": { "type": "string" }
+            },
+            "required": ["id", "authorId", "authorName", "text", "createdAt"]
+          }
         }
       },
-      "required": ["title", "description", "authorId", "authorName", "createdAt", "status", "upvotes", "upvotedBy"]
+      "required": ["title", "description", "authorId", "authorName", "createdAt", "status", "upvotes", "upvotedBy", "downvotes", "downvotedBy", "comments"]
     }
   },
   "firestore": {

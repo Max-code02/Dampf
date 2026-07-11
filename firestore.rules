@@ -364,8 +364,8 @@ service cloud.firestore {
 
     // Suggestion Validation
     function isValidSuggestion(data) {
-      return data.keys().hasAll(['title', 'description', 'authorId', 'authorName', 'createdAt', 'status', 'upvotes', 'upvotedBy']) &&
-             data.keys().size() == 8 &&
+      return data.keys().hasAll(['title', 'description', 'authorId', 'authorName', 'createdAt', 'status', 'upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments']) &&
+             data.keys().size() == 11 &&
              data.title is string && data.title.size() <= 100 &&
              data.description is string && data.description.size() <= 2000 &&
              data.authorId is string &&
@@ -373,26 +373,34 @@ service cloud.firestore {
              (data.createdAt == request.time || data.createdAt is timestamp) &&
              data.status in ['pending', 'planned', 'in-progress', 'completed', 'declined'] &&
              data.upvotes is int &&
-             data.upvotedBy is list;
+             data.upvotedBy is list &&
+             data.downvotes is int &&
+             data.downvotedBy is list &&
+             data.comments is list;
     }
 
     match /suggestions/{suggestionId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidSuggestion(incoming()) && incoming().authorId == request.auth.uid && incoming().status == 'pending' && incoming().upvotes == 1 && incoming().upvotedBy.size() == 1 && incoming().upvotedBy[0] == request.auth.uid;
+      allow create: if isValidSuggestion(incoming()) && 
+                       (isSignedIn() ? incoming().authorId == request.auth.uid : incoming().authorId.startsWith('guest_')) && 
+                       incoming().status == 'pending' && 
+                       incoming().upvotes == 1 && 
+                       incoming().upvotedBy.size() == 1 && 
+                       incoming().upvotedBy[0] == incoming().authorId &&
+                       incoming().downvotes == 0 &&
+                       incoming().downvotedBy.size() == 0 &&
+                       incoming().comments.size() == 0;
       allow delete: if isAdmin();
-      allow update: if isSignedIn() && (
-        isAdmin() ||
-        (
-          incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy']) &&
-          incoming().title == existing().title &&
-          incoming().description == existing().description &&
-          incoming().authorId == existing().authorId &&
-          incoming().authorName == existing().authorName &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().status == existing().status &&
-          incoming().upvotes is int &&
-          incoming().upvotedBy is list
-        )
+      allow update: if isAdmin() || (
+        isValidSuggestion(incoming()) &&
+        incoming().title == existing().title &&
+        incoming().description == existing().description &&
+        incoming().authorId == existing().authorId &&
+        incoming().authorName == existing().authorName &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().status == existing().status &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments']) &&
+        (incoming().comments == existing().comments || isSignedIn())
       );
     }
   }

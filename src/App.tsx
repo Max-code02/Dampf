@@ -874,6 +874,14 @@ interface Poll {
   createdAt: any;
 }
 
+interface SuggestionComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+}
+
 interface Suggestion {
   id: string;
   title: string;
@@ -884,6 +892,9 @@ interface Suggestion {
   status: 'pending' | 'planned' | 'in-progress' | 'completed' | 'declined';
   upvotes: number;
   upvotedBy: string[];
+  downvotes: number;
+  downvotedBy: string[];
+  comments: SuggestionComment[];
 }
 
 interface ShopItem {
@@ -1139,6 +1150,15 @@ export default function App() {
   });
   const [copied, setCopied] = useState<string | null>(null);
   const [user, setUser] = useState<User| null>(null);
+  const [guestId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'guest_temp';
+    let id = localStorage.getItem('suggestions_guest_id');
+    if (!id) {
+      id = 'guest_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('suggestions_guest_id', id);
+    }
+    return id;
+  });
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOwner, setIsOwner] = useState(false); // New Owner tier
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -2219,6 +2239,7 @@ export default function App() {
   const [shopOpen, setShopOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [expandedSuggestionComments, setExpandedSuggestionComments] = useState<Record<string, boolean>>({});
   const [devLabsOpen, setDevLabsOpen] = useState(false);
   const [devLabsTab, setDevLabsTab] = useState<'rust' | 'flutter'>('rust');
   const [showLogs, setShowLogs] = useState(false);
@@ -2527,16 +2548,30 @@ export default function App() {
   const fetchSuggestions = async () => {
     if (hasQuotaExceeded) return;
     try {
-      const suggestSnap = await getDocs(query(collection(db, 'suggestions'), orderBy('upvotes', 'desc'), limit(50)));
-      setSuggestions(suggestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion)));
+      const suggestSnap = await getDocs(query(collection(db, 'suggestions'), limit(100)));
+      const items = suggestSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          upvotes: data.upvotes ?? 0,
+          upvotedBy: data.upvotedBy ?? [],
+          downvotes: data.downvotes ?? 0,
+          downvotedBy: data.downvotedBy ?? [],
+          comments: data.comments ?? []
+        } as Suggestion;
+      });
+      items.sort((a, b) => {
+        const scoreA = (a.upvotes || 0) - (a.downvotes || 0);
+        const scoreB = (b.upvotes || 0) - (b.downvotes || 0);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      setSuggestions(items);
     } catch (err: any) {
       if (err.message.includes('Quota')) setHasQuotaExceeded(true);
-      // Fallback if index on upvotes doesn't exist yet
-      try {
-        const fallbackSnap = await getDocs(query(collection(db, 'suggestions'), orderBy('createdAt', 'desc'), limit(50)));
-        const sorted = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion)).sort((a, b) => b.upvotes - a.upvotes);
-        setSuggestions(sorted);
-      } catch (err2: any) {}
     }
   };
 
@@ -4500,52 +4535,143 @@ export default function App() {
   // Suggestion Management
   const handleSuggestionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return setShowLoginModal(true);
     const form = e.target as HTMLFormElement;
     const title = (form.elements.namedItem('title') as HTMLInputElement).value;
     const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
-
+ 
     if (!title.trim() || !description.trim()) return;
-
+ 
+    let authorIdVal = '';
+    let authorNameVal = '';
+ 
+    if (user) {
+      authorIdVal = user.uid;
+      authorNameVal = myProfile?.displayName || user.displayName || 'Unbekannt';
+    } else {
+      authorIdVal = guestId;
+      const guestNameInput = form.elements.namedItem('guestName') as HTMLInputElement | null;
+      authorNameVal = (guestNameInput?.value || '').trim() || 'Gast-Spieler';
+    }
+ 
     try {
       await addDoc(collection(db, 'suggestions'), {
         title,
         description,
-        authorId: user.uid,
-        authorName: myProfile?.displayName || user.displayName || 'Unknown',
+        authorId: authorIdVal,
+        authorName: authorNameVal,
         createdAt: serverTimestamp(),
         status: 'pending',
         upvotes: 1,
-        upvotedBy: [user.uid]
+        upvotedBy: [authorIdVal],
+        downvotes: 0,
+        downvotedBy: [],
+        comments: []
       });
       form.reset();
       fetchSuggestions();
-      // Optional: alert or toast
     } catch (err) {
       console.error(err);
     }
   };
-
-  const toggleUpvote = async (suggestionId: string, currentUpvotedBy: string[]) => {
-    if (!user) return setShowLoginModal(true);
+ 
+  const toggleUpvote = async (suggestionId: string, currentUpvotedBy: string[], currentDownvotedBy: string[] = []) => {
+    const voterId = user ? user.uid : guestId;
     try {
-      const isUpvoted = (currentUpvotedBy || []).includes(user.uid);
+      const isUpvoted = (currentUpvotedBy || []).includes(voterId);
       const newUpvotedBy = isUpvoted 
-        ? (currentUpvotedBy || []).filter(id => id !== user.uid)
-        : [...(currentUpvotedBy || []), user.uid];
+        ? (currentUpvotedBy || []).filter(id => id !== voterId)
+        : [...(currentUpvotedBy || []), voterId];
+      
+      const newDownvotedBy = isUpvoted 
+        ? (currentDownvotedBy || [])
+        : (currentDownvotedBy || []).filter(id => id !== voterId);
       
       const newUpvotes = newUpvotedBy.length;
+      const newDownvotes = newDownvotedBy.length;
       
       // Optimitic update
-      setSuggestions(prev => prev.map(s => s.id === suggestionId ? { ...s, upvotes: newUpvotes, upvotedBy: newUpvotedBy } : s));
+      setSuggestions(prev => prev.map(s => s.id === suggestionId ? { 
+        ...s, 
+        upvotes: newUpvotes, 
+        upvotedBy: newUpvotedBy,
+        downvotes: newDownvotes,
+        downvotedBy: newDownvotedBy
+      } : s));
       
       await setDoc(doc(db, 'suggestions', suggestionId), {
         upvotes: newUpvotes,
-        upvotedBy: newUpvotedBy
+        upvotedBy: newUpvotedBy,
+        downvotes: newDownvotes,
+        downvotedBy: newDownvotedBy
       }, { merge: true });
     } catch (err) {
       console.error(err);
       fetchSuggestions(); // revert
+    }
+  };
+
+  const toggleDownvote = async (suggestionId: string, currentDownvotedBy: string[] = [], currentUpvotedBy: string[] = []) => {
+    const voterId = user ? user.uid : guestId;
+    try {
+      const isDownvoted = (currentDownvotedBy || []).includes(voterId);
+      const newDownvotedBy = isDownvoted 
+        ? (currentDownvotedBy || []).filter(id => id !== voterId)
+        : [...(currentDownvotedBy || []), voterId];
+      
+      const newUpvotedBy = isDownvoted 
+        ? (currentUpvotedBy || [])
+        : (currentUpvotedBy || []).filter(id => id !== voterId);
+      
+      const newUpvotes = newUpvotedBy.length;
+      const newDownvotes = newDownvotedBy.length;
+      
+      // Optimitic update
+      setSuggestions(prev => prev.map(s => s.id === suggestionId ? { 
+        ...s, 
+        upvotes: newUpvotes, 
+        upvotedBy: newUpvotedBy,
+        downvotes: newDownvotes,
+        downvotedBy: newDownvotedBy
+      } : s));
+      
+      await setDoc(doc(db, 'suggestions', suggestionId), {
+        upvotes: newUpvotes,
+        upvotedBy: newUpvotedBy,
+        downvotes: newDownvotes,
+        downvotedBy: newDownvotedBy
+      }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      fetchSuggestions(); // revert
+    }
+  };
+
+  const handleCommentSubmit = async (suggestionId: string, text: string) => {
+    if (!user) return setShowLoginModal(true);
+    if (!text.trim()) return;
+    try {
+      const parentSg = suggestions.find(s => s.id === suggestionId);
+      if (!parentSg) return;
+      
+      const newComment: SuggestionComment = {
+        id: Math.random().toString(36).substring(2, 11),
+        authorId: user.uid,
+        authorName: myProfile?.displayName || user.displayName || 'Unbekannt',
+        text: text.trim(),
+        createdAt: new Date().toISOString()
+      };
+      
+      const updatedComments = [...(parentSg.comments || []), newComment];
+      
+      // Optimitic update
+      setSuggestions(prev => prev.map(s => s.id === suggestionId ? { ...s, comments: updatedComments } : s));
+      
+      await setDoc(doc(db, 'suggestions', suggestionId), {
+        comments: updatedComments
+      }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      fetchSuggestions();
     }
   };
 
@@ -10264,19 +10390,27 @@ export default function App() {
               <div className="bg-neutral-900/50 p-4 rounded-xl border border-neutral-800 mb-6">
                 <h4 className="text-sm font-bold text-white mb-2">Neuen Vorschlag einreichen</h4>
                 <form onSubmit={handleSuggestionSubmit} className="space-y-3">
+                  {!user && (
+                    <input
+                      name="guestName"
+                      type="text"
+                      placeholder="Dein Name / Nickname (optional)..."
+                      className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors text-neutral-300"
+                    />
+                  )}
                   <input
                     name="title"
                     type="text"
                     required
                     placeholder="Kurzer, prägnanter Titel..."
-                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors"
+                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors text-neutral-200"
                   />
                   <textarea
                     name="description"
                     required
                     placeholder="Beschreibe deine Idee im Detail..."
                     rows={3}
-                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors resize-none"
+                    className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors resize-none text-neutral-200"
                   />
                   <button
                     type="submit"
@@ -10289,74 +10423,175 @@ export default function App() {
 
               <div className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Aktuelle Vorschläge</h4>
-                {suggestions.map((sug) => (
-                  <div key={sug.id} className="bg-black border border-neutral-800 rounded-xl p-4 flex gap-4 hover:border-neutral-700 transition-colors group">
-                    <div className="flex flex-col items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => toggleUpvote(sug.id, sug.upvotedBy)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          (sug.upvotedBy || []).includes(user?.uid || '')
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                            : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800 border border-transparent'
-                        }`}
-                      >
-                        <ChevronUp size={20} className={(sug.upvotedBy || []).includes(user?.uid || '') ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''} />
-                      </button>
-                      <span className={`font-black text-sm ${(sug.upvotedBy || []).includes(user?.uid || '') ? 'text-blue-400' : 'text-neutral-300'}`}>
-                        {sug.upvotes || 0}
-                      </span>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h5 className="font-bold text-sm text-white truncate" title={sug.title}>{sug.title}</h5>
-                        {sug.status && (
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0 ${
-                            sug.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                            sug.status === 'in-progress' ? 'bg-blue-500/20 text-blue-400' :
-                            sug.status === 'planned' ? 'bg-purple-500/20 text-purple-400' :
-                            sug.status === 'declined' ? 'bg-red-500/20 text-red-400' :
-                            'bg-neutral-800 text-neutral-400'
-                          }`}>
-                            {sug.status}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-neutral-400 whitespace-pre-wrap break-words leading-relaxed">{sug.description}</p>
-                      <div className="mt-3 flex items-center justify-between">
-                        <p className="text-[10px] text-neutral-500">
-                          Von <span className="text-neutral-300">{sug.authorName}</span>
-                        </p>
-                        {isAdmin && (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                            <select
-                              value={sug.status || 'pending'}
-                              onChange={(e) => setDoc(doc(db, 'suggestions', sug.id), { status: e.target.value }, { merge: true }).then(fetchSuggestions)}
-                              className="text-[9px] bg-neutral-900 border border-neutral-700 rounded px-1 text-neutral-300 outline-none"
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="planned">Geplant</option>
-                              <option value="in-progress">In Arbeit</option>
-                              <option value="completed">Fertig</option>
-                              <option value="declined">Abgelehnt</option>
-                            </select>
+                {suggestions.map((sug) => {
+                  const commentsCount = (sug.comments || []).length;
+                  const isCommentsExpanded = !!expandedSuggestionComments[sug.id];
+                  const hasUpvoted = (sug.upvotedBy || []).includes(user?.uid || guestId);
+                  const hasDownvoted = (sug.downvotedBy || []).includes(user?.uid || guestId);
+
+                  return (
+                    <div key={sug.id} className="bg-black border border-neutral-800 rounded-xl p-4 flex flex-col hover:border-neutral-700 transition-colors group">
+                      <div className="flex gap-4">
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                          {/* Upvote Button */}
+                          <div className="flex flex-col items-center gap-0.5">
                             <button
-                              onClick={async () => {
-                                if (confirm("Vorschlag löschen?")) {
-                                  await deleteDoc(doc(db, 'suggestions', sug.id));
-                                  fetchSuggestions();
-                                }
-                              }}
-                              className="text-red-500 hover:text-red-400 p-0.5"
+                              onClick={() => toggleUpvote(sug.id, sug.upvotedBy || [], sug.downvotedBy || [])}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                hasUpvoted
+                                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800 border border-transparent'
+                              }`}
+                              title="Dafür stimmen"
                             >
-                              <Trash2 size={12} />
+                              <ChevronUp size={18} className={hasUpvoted ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''} />
                             </button>
+                            <span className={`font-black text-xs ${hasUpvoted ? 'text-blue-400' : 'text-neutral-300'}`}>
+                              {sug.upvotes || 0}
+                            </span>
+                          </div>
+
+                          {/* Downvote Button */}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              onClick={() => toggleDownvote(sug.id, sug.downvotedBy || [], sug.upvotedBy || [])}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                hasDownvoted
+                                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                  : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800 border border-transparent'
+                              }`}
+                              title="Dagegen stimmen"
+                            >
+                              <ChevronDown size={18} className={hasDownvoted ? 'drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]' : ''} />
+                            </button>
+                            <span className={`font-black text-xs ${hasDownvoted ? 'text-red-400' : 'text-neutral-500'}`}>
+                              {sug.downvotes || 0}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h5 className="font-bold text-sm text-white truncate" title={sug.title}>{sug.title}</h5>
+                            {sug.status && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0 ${
+                                sug.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                sug.status === 'in-progress' ? 'bg-blue-500/20 text-blue-400' :
+                                sug.status === 'planned' ? 'bg-purple-500/20 text-purple-400' :
+                                sug.status === 'declined' ? 'bg-red-500/20 text-red-400' :
+                                'bg-neutral-800 text-neutral-400'
+                              }`}>
+                                {sug.status}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-400 whitespace-pre-wrap break-words leading-relaxed">{sug.description}</p>
+                          <div className="mt-3 flex items-center justify-between">
+                            <p className="text-[10px] text-neutral-500">
+                              Von <span className="text-neutral-300">{sug.authorName}</span>
+                            </p>
+                            {isAdmin && (
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                <select
+                                  value={sug.status || 'pending'}
+                                  onChange={(e) => setDoc(doc(db, 'suggestions', sug.id), { status: e.target.value }, { merge: true }).then(fetchSuggestions)}
+                                  className="text-[9px] bg-neutral-900 border border-neutral-700 rounded px-1 text-neutral-300 outline-none"
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="planned">Geplant</option>
+                                  <option value="in-progress">In Arbeit</option>
+                                  <option value="completed">Fertig</option>
+                                  <option value="declined">Abgelehnt</option>
+                                </select>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm("Vorschlag löschen?")) {
+                                      await deleteDoc(doc(db, 'suggestions', sug.id));
+                                      fetchSuggestions();
+                                    }
+                                  }}
+                                  className="text-red-500 hover:text-red-400 p-0.5"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comments Section */}
+                      <div className="mt-3 pt-3 border-t border-neutral-900">
+                        <button
+                          onClick={() => setExpandedSuggestionComments(prev => ({ ...prev, [sug.id]: !prev[sug.id] }))}
+                          className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
+                        >
+                          <MessageSquare size={14} className="text-neutral-500" />
+                          <span>{commentsCount} {commentsCount === 1 ? 'Kommentar' : 'Kommentare'}</span>
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${isCommentsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                        
+                        {isCommentsExpanded && (
+                          <div className="mt-3 space-y-3 pl-2 border-l border-neutral-800">
+                            {/* Comment list */}
+                            {(sug.comments || []).length > 0 ? (
+                              <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                                {(sug.comments || []).map((comment) => (
+                                  <div key={comment.id} className="bg-neutral-900/40 p-2 rounded-lg border border-neutral-900">
+                                    <div className="flex justify-between items-center mb-1">
+                                      <span className="text-[10px] font-bold text-neutral-300">{comment.authorName}</span>
+                                      <span className="text-[9px] text-neutral-500">
+                                        {new Date(comment.createdAt).toLocaleDateString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-neutral-300 break-words">{comment.text}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-neutral-500 italic">Noch keine Kommentare.</p>
+                            )}
+                            
+                            {/* Post comment form */}
+                            {user ? (
+                              <form 
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  const input = e.currentTarget.elements.namedItem('commentText') as HTMLInputElement;
+                                  if (input && input.value.trim()) {
+                                    handleCommentSubmit(sug.id, input.value);
+                                    input.value = '';
+                                  }
+                                }}
+                                className="flex gap-2 mt-2"
+                              >
+                                <input
+                                  name="commentText"
+                                  type="text"
+                                  placeholder="Schreibe einen Kommentar..."
+                                  required
+                                  className="flex-1 bg-black border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs focus:border-blue-500 outline-none transition-colors text-neutral-200"
+                                />
+                                <button
+                                  type="submit"
+                                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-colors shrink-0"
+                                >
+                                  Senden
+                                </button>
+                              </form>
+                            ) : (
+                              <div className="bg-neutral-900/50 p-2 rounded-lg text-center border border-neutral-900">
+                                <p className="text-[10px] text-neutral-500">
+                                  Bitte <button onClick={() => setShowLoginModal(true)} className="text-blue-400 hover:underline font-semibold">melde dich an</button>, um zu kommentieren.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {suggestions.length === 0 && (
                   <div className="text-center py-10">
