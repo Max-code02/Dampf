@@ -77,7 +77,7 @@ service cloud.firestore {
       return data.keys().hasAll(['text', 'userId', 'displayName', 'createdAt']) &&
              data.keys().size() <= 15 &&
              data.text is string && data.text.size() <= 2000 &&
-             (data.userId == request.auth.uid || data.userId == "system" || data.userId == "quiz_bot") &&
+             (isSignedIn() ? (data.userId == request.auth.uid || data.userId == "system" || data.userId == "quiz_bot") : (data.userId.matches('^guest_.*'))) &&
              data.displayName is string && data.displayName.size() <= 64 &&
              (data.createdAt == request.time || data.createdAt is timestamp) &&
              (!('tempId' in data) || (data.tempId is string && data.tempId.size() <= 256)) &&
@@ -86,6 +86,7 @@ service cloud.firestore {
              (!('isLocal' in data) || (data.isLocal is bool)) &&
              (!('isStaffOnly' in data) || (data.isStaffOnly is bool)) &&
              (!('channel' in data) || (data.channel is string && data.channel.size() <= 64)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 10000000)) &&
              (!('purchasedRank' in data) || (data.purchasedRank is string && data.purchasedRank.size() <= 64));
     }
 
@@ -253,7 +254,7 @@ service cloud.firestore {
     // Chat Messages
     match /chat_messages/{messageId} {
       allow read: if true;
-      allow create: if isSignedIn() && (isValidChatMessage(incoming()) || isSystemBot());
+      allow create: if (isSignedIn() || incoming().userId.matches('^guest_.*')) && (isValidChatMessage(incoming()) || isSystemBot());
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -365,7 +366,7 @@ service cloud.firestore {
     // Suggestion Validation
     function isValidSuggestion(data) {
       return data.keys().hasAll(['title', 'description', 'authorId', 'authorName', 'createdAt', 'status', 'upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments']) &&
-             data.keys().size() == 11 &&
+             (data.keys().size() == 11 || (data.keys().size() == 12 && 'tag' in data && data.tag is string && data.tag in ['Feature', 'Bug-Report', 'Design', 'Sonstiges'])) &&
              data.title is string && data.title.size() <= 100 &&
              data.description is string && data.description.size() <= 2000 &&
              data.authorId is string &&
@@ -382,6 +383,7 @@ service cloud.firestore {
     match /suggestions/{suggestionId} {
       allow read: if true;
       allow create: if isValidSuggestion(incoming()) && 
+                       'tag' in incoming() &&
                        (isSignedIn() ? incoming().authorId == request.auth.uid : incoming().authorId.matches('^guest_.*')) && 
                        incoming().status == 'pending' && 
                        incoming().upvotes == 1 && 

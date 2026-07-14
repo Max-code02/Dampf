@@ -895,6 +895,7 @@ interface Suggestion {
   downvotes: number;
   downvotedBy: string[];
   comments: SuggestionComment[];
+  tag?: 'Feature' | 'Bug-Report' | 'Design' | 'Sonstiges';
 }
 
 interface ShopItem {
@@ -2240,6 +2241,44 @@ export default function App() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [expandedSuggestionComments, setExpandedSuggestionComments] = useState<Record<string, boolean>>({});
+  const [suggestionsSort, setSuggestionsSort] = useState<'score' | 'newest' | 'comments'>('score');
+  const [suggestionsTagFilter, setSuggestionsTagFilter] = useState<string>('All');
+  const [chatGuestName, setChatGuestName] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('suggestions_guest_name') || '';
+  });
+  
+  const filteredAndSortedSuggestions = useMemo(() => {
+    let result = [...suggestions];
+    // 1. Filter by tag
+    if (suggestionsTagFilter !== 'All') {
+      result = result.filter(sug => sug.tag === suggestionsTagFilter);
+    }
+    // 2. Sort
+    result.sort((a, b) => {
+      if (suggestionsSort === 'score') {
+        const scoreA = (a.upvotes || 0) - (a.downvotes || 0);
+        const scoreB = (b.upvotes || 0) - (b.downvotes || 0);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      } else if (suggestionsSort === 'newest') {
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      } else if (suggestionsSort === 'comments') {
+        const commentsA = (a.comments || []).length;
+        const commentsB = (b.comments || []).length;
+        if (commentsB !== commentsA) return commentsB - commentsA;
+        const scoreA = (a.upvotes || 0) - (a.downvotes || 0);
+        const scoreB = (b.upvotes || 0) - (b.downvotes || 0);
+        return scoreB - scoreA;
+      }
+      return 0;
+    });
+    return result;
+  }, [suggestions, suggestionsSort, suggestionsTagFilter]);
   const [devLabsOpen, setDevLabsOpen] = useState(false);
   const [devLabsTab, setDevLabsTab] = useState<'rust' | 'flutter'>('rust');
   const [showLogs, setShowLogs] = useState(false);
@@ -2558,7 +2597,8 @@ export default function App() {
           upvotedBy: data.upvotedBy ?? [],
           downvotes: data.downvotes ?? 0,
           downvotedBy: data.downvotedBy ?? [],
-          comments: data.comments ?? []
+          comments: data.comments ?? [],
+          tag: data.tag ?? 'Sonstiges'
         } as Suggestion;
       });
       items.sort((a, b) => {
@@ -4538,6 +4578,7 @@ export default function App() {
     const form = e.target as HTMLFormElement;
     const title = (form.elements.namedItem('title') as HTMLInputElement).value;
     const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
+    const tag = (form.elements.namedItem('tag') as HTMLSelectElement).value;
  
     if (!title.trim() || !description.trim()) return;
  
@@ -4565,7 +4606,8 @@ export default function App() {
         upvotedBy: [authorIdVal],
         downvotes: 0,
         downvotedBy: [],
-        comments: []
+        comments: [],
+        tag: tag || 'Sonstiges'
       });
       form.reset();
       fetchSuggestions();
@@ -6265,7 +6307,7 @@ export default function App() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user && !guestId) return;
 
     // Helper to send local system message (Only visible to current user)
     const sendSystemMsg = (text: string, title: string = 'SYSTEM') => {
@@ -6291,6 +6333,11 @@ export default function App() {
 
     if (!chatInput.trim()) return;
     const input = chatInput.trim();
+
+    const guestDispName = chatGuestName || 'Gast-' + guestId.substring(6, 12);
+    const senderName = user ? (myProfile?.displayName || user.displayName || 'Unbekannt') : guestDispName;
+    const senderRole = user ? (myProfile?.role || 'Member') : 'Gast';
+    const senderUid = user ? user.uid : guestId;
 
     const getLevel = (xp: number = 0) => Math.floor(Math.sqrt(xp / 100)) + 1;
     const getXPForLevel = (level: number) => Math.pow(level - 1, 2) * 100;
@@ -6328,9 +6375,13 @@ export default function App() {
             break;
           }
           case 'coins':
-            sendSystemMsg(`💰 Dein Kontostand: §e${myProfile?.coins || 0} Coins§r`);
+            sendSystemMsg(`💰 Dein Kontostand: §e${user ? (myProfile?.coins || 0) : 0} Coins§r${user ? '' : ' (Melde dich an, um Coins zu verdienen!)'}`);
             break;
           case 'pay': {
+            if (!user) {
+              sendSystemMsg("§cDu musst registriert und eingeloggt sein, um Coins zu überweisen!§r");
+              break;
+            }
             if (args.length < 2) {
               sendSystemMsg("§cVerwendung: /pay [Name] [Betrag]§r");
               break;
@@ -6389,11 +6440,14 @@ export default function App() {
           }
           case 'me': {
             if (args.length === 0) break;
+            const fallbackDisp = chatGuestName || 'Gast-' + guestId.substring(6, 12);
+            const chosenDispName = user ? (myProfile?.displayName || user.displayName || 'Unbekannt') : fallbackDisp;
+            const chosenRole = user ? (myProfile?.role || 'Member') : 'Gast';
             await addDoc(collection(db, 'chat_messages'), {
-              text: `* ${myProfile?.displayName} ${args.join(' ')}`,
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              text: `* ${chosenDispName} ${args.join(' ')}`,
+              userId: user ? user.uid : guestId,
+              displayName: chosenDispName,
+              role: chosenRole,
               createdAt: serverTimestamp(),
               isAction: true,
               tempId: `act-${Date.now()}-${Math.random()}`
@@ -6407,6 +6461,10 @@ export default function App() {
             break;
           }
           case 'rank': {
+            if (!user) {
+              sendSystemMsg("§cDu musst registriert und eingeloggt sein, um XP und Levels zu sammeln!§r");
+              break;
+            }
             const xp = myProfile?.xp || 0;
             const lv = getLevel(xp);
             const nextLv = lv + 1;
@@ -6424,7 +6482,11 @@ export default function App() {
             sendSystemMsg(`§9§lDISCORD VERBINDUNG:§r\n${DISCORD_URL}`);
             break;
           case 'stats': {
-            const targetName = args[0] || myProfile?.displayName;
+            const targetName = args[0] || (user ? myProfile?.displayName : null);
+            if (!targetName) {
+              sendSystemMsg("§cVerwendung: /stats [Spieler] (Da du als Gast spielst, gib bitte einen registrierten Spielernamen an!)§r");
+              break;
+            }
             const targetProf = userProfiles.find(p => p.minecraftUsername?.toLowerCase() === targetName?.toLowerCase() || p.displayName?.toLowerCase() === targetName?.toLowerCase());
             if (!targetProf) {
               sendSystemMsg(`§cFehler: Spieler-Profil "${targetName}" nicht gefunden.§r`);
@@ -6470,10 +6532,10 @@ export default function App() {
             const max = parseInt(args[0]) || 100;
             const result = Math.floor(Math.random() * max) + 1;
             await addDoc(collection(db, 'chat_messages'), {
-              text: `🎲 **${myProfile?.displayName}** würfelt eine **${result}** (1-${max})`,
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              text: `🎲 **${senderName}** würfelt eine **${result}** (1-${max})`,
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               isAction: true,
               tempId: `roll-${Date.now()}`
@@ -6483,10 +6545,10 @@ export default function App() {
           case 'flip': {
             const result = Math.random() > 0.5 ? '§eKOPF§r' : '§7ZAHL§r';
             await addDoc(collection(db, 'chat_messages'), {
-              text: `🪙 **${myProfile?.displayName}** wirft eine Münze: ${result}!`,
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              text: `🪙 **${senderName}** wirft eine Münze: ${result}!`,
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               isAction: true,
               tempId: `flip-${Date.now()}`
@@ -6516,7 +6578,7 @@ export default function App() {
           case 'joke': {
             const jokes = [
               "Hacker beim Angeln. Er fängt einen dicken Fisch. 'Warum schaust du so?' - 'Ich finde den Download-Button nicht!'",
-              "Warum tragen Creeper keine Brillen? Weil sie alles mit einem Knall sehen!",
+              "Warum tragen Creeper keine Brillen? Weil sei alles mit einem Knall sehen!",
               "Was ist der Lieblings-Song eines Endermans? 'Don't Look Back in Anger'.",
               "Ein Skelett geht in eine Bar... und bestellt ein Bier und einen Wischmopp.",
               "Was passiert, wenn man einen Creeper und eine Ziege kreuzt? Eine Explosiv-Milch!",
@@ -6528,9 +6590,9 @@ export default function App() {
           case 'shrug': {
             await addDoc(collection(db, 'chat_messages'), {
               text: '¯\\_(ツ)_/¯',
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               tempId: `shrug-${Date.now()}`
             });
@@ -6539,9 +6601,9 @@ export default function App() {
           case 'lenny': {
             await addDoc(collection(db, 'chat_messages'), {
               text: '( ͡° ͜ʖ ͡°)',
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               tempId: `lenny-${Date.now()}`
             });
@@ -6550,9 +6612,9 @@ export default function App() {
           case 'tableflip': {
             await addDoc(collection(db, 'chat_messages'), {
               text: '(╯°□°）╯︵ ┻━┻',
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               tempId: `tableflip-${Date.now()}`
             });
@@ -6561,10 +6623,10 @@ export default function App() {
           case 'hug': {
             if (args.length === 0) break;
             await addDoc(collection(db, 'chat_messages'), {
-              text: `🤗 **${myProfile?.displayName}** umarmt **${args.join(' ')}** ganz fest!`,
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              text: `🤗 **${senderName}** umarmt **${args.join(' ')}** ganz fest!`,
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               isAction: true,
               tempId: `hug-${Date.now()}`
@@ -6574,10 +6636,10 @@ export default function App() {
           case 'slap': {
             if (args.length === 0) break;
             await addDoc(collection(db, 'chat_messages'), {
-              text: `👋 **${myProfile?.displayName}** gibt **${args.join(' ')}** eine fette Backpfeife!`,
-              userId: user.uid,
-              displayName: myProfile?.displayName || 'Unbekannt',
-              role: myProfile?.role || 'Member',
+              text: `👋 **${senderName}** gibt **${args.join(' ')}** eine fette Backpfeife!`,
+              userId: senderUid,
+              displayName: senderName,
+              role: senderRole,
               createdAt: serverTimestamp(),
               isAction: true,
               tempId: `slap-${Date.now()}`
@@ -6770,10 +6832,10 @@ export default function App() {
     const tempMsg: ChatMessage = {
       id: tempId,
       text: inputToSend,
-      userId: user.uid,
-      displayName: (myProfile?.displayName || user.displayName || 'Unbekannt').substring(0, 64),
-      role: (myProfile?.role || 'Member').substring(0, 64),
-      purchasedRank: myProfile?.purchasedRank,
+      userId: senderUid,
+      displayName: senderName.substring(0, 64),
+      role: senderRole.substring(0, 64),
+      purchasedRank: user ? myProfile?.purchasedRank : undefined,
       createdAt: null,
       tempId: tempId,
       localTimestamp: localTimestamp,
@@ -6798,10 +6860,10 @@ export default function App() {
         const msgRef = doc(db, 'chat_messages', tempId);
         await setDoc(msgRef, {
           text: inputToSend,
-          userId: user.uid,
-          displayName: (myProfile?.displayName || user.displayName || 'Unbekannt').substring(0, 64),
-          role: (myProfile?.role || 'Member').substring(0, 64),
-          purchasedRank: myProfile?.purchasedRank || "",
+          userId: senderUid,
+          displayName: senderName.substring(0, 64),
+          role: senderRole.substring(0, 64),
+          purchasedRank: user ? (myProfile?.purchasedRank || "") : "",
           createdAt: serverTimestamp(),
           tempId: tempId,
           channel: chatChannel
@@ -6812,7 +6874,7 @@ export default function App() {
           chatChannel === 'quiz' ? `Ein Benutzer hat eine Antwort im Quiz-Chat eingereicht.` : `Eine neue Nachricht wurde im globalen Chat gesendet.`,
           chatChannel === 'quiz' ? 16750848 : 3447003,
           [
-            { name: "👤 Absender", value: myProfile?.displayName || user.displayName || 'Unbekannt', inline: true },
+            { name: "👤 Absender", value: senderName, inline: true },
             { name: chatChannel === 'quiz' ? "💡 Antwort" : "💬 Nachricht", value: inputToSend, inline: false }
           ]
         );
@@ -10425,18 +10487,78 @@ export default function App() {
                     rows={3}
                     className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors resize-none text-neutral-200"
                   />
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Kategorie / Tag</label>
+                    <select
+                      name="tag"
+                      required
+                      className="w-full bg-black border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none transition-colors text-neutral-300 appearance-none"
+                    >
+                      <option value="Feature">Feature</option>
+                      <option value="Bug-Report">Bug-Report</option>
+                      <option value="Design">Design</option>
+                      <option value="Sonstiges">Sonstiges</option>
+                    </select>
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors text-sm"
+                    className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors text-sm mt-2"
                   >
                     Vorschlag senden
                   </button>
                 </form>
               </div>
 
+              {/* Filter and Sort Controls */}
+              <div className="bg-neutral-900/30 p-3 rounded-xl border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-neutral-400">Tag Filter:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {['All', 'Feature', 'Bug-Report', 'Design', 'Sonstiges'].map((tagOption) => (
+                      <button
+                        key={tagOption}
+                        onClick={() => setSuggestionsTagFilter(tagOption)}
+                        className={`text-[10px] px-2 py-1 rounded font-semibold transition-colors ${
+                          suggestionsTagFilter === tagOption
+                            ? 'bg-blue-500 text-white shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200'
+                        }`}
+                      >
+                        {tagOption === 'All' ? 'Alle' : tagOption}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 border-t border-neutral-800 pt-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-neutral-400">Sortierung:</span>
+                  <div className="flex gap-1">
+                    {[
+                      { value: 'score', label: 'Beste' },
+                      { value: 'newest', label: 'Neueste' },
+                      { value: 'comments', label: 'Aktivste' }
+                    ].map((sortOption) => (
+                      <button
+                        key={sortOption.value}
+                        onClick={() => setSuggestionsSort(sortOption.value as any)}
+                        className={`text-[10px] px-2 py-1 rounded font-semibold transition-colors ${
+                          suggestionsSort === sortOption.value
+                            ? 'bg-blue-500 text-white shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200'
+                        }`}
+                      >
+                        {sortOption.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Aktuelle Vorschläge</h4>
-                {suggestions.map((sug) => {
+                {filteredAndSortedSuggestions.map((sug) => {
                   const commentsCount = (sug.comments || []).length;
                   const isCommentsExpanded = !!expandedSuggestionComments[sug.id];
                   const hasUpvoted = (sug.upvotedBy || []).includes(user?.uid || guestId);
@@ -10485,7 +10607,19 @@ export default function App() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <h5 className="font-bold text-sm text-white truncate" title={sug.title}>{sug.title}</h5>
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <h5 className="font-bold text-sm text-white truncate" title={sug.title}>{sug.title}</h5>
+                              {sug.tag && (
+                                <span className={`self-start text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
+                                  sug.tag === 'Feature' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                  sug.tag === 'Bug-Report' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                                  sug.tag === 'Design' ? 'bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20' :
+                                  'bg-neutral-800 text-neutral-400 border border-neutral-850'
+                                }`}>
+                                  {sug.tag}
+                                </span>
+                              )}
+                            </div>
                             {sug.status && (
                               <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0 ${
                                 sug.status === 'completed' ? 'bg-green-500/20 text-green-400' :
@@ -10614,10 +10748,14 @@ export default function App() {
                   );
                 })}
                 
-                {suggestions.length === 0 && (
+                {filteredAndSortedSuggestions.length === 0 && (
                   <div className="text-center py-10">
                     <Lightbulb size={32} className="mx-auto text-neutral-700 mb-3" />
-                    <p className="text-neutral-500 text-sm italic">Noch keine Vorschläge vorhanden.</p>
+                    <p className="text-neutral-500 text-sm italic">
+                      {suggestionsTagFilter === 'All' 
+                        ? 'Noch keine Vorschläge vorhanden.' 
+                        : `Noch keine Vorschläge in der Kategorie "${suggestionsTagFilter}" vorhanden.`}
+                    </p>
                   </div>
                 )}
               </div>
@@ -11732,83 +11870,106 @@ export default function App() {
                 )}
               </AnimatePresence>
 
-              {user ? (
-                <div className="flex flex-col gap-2">
-                  {!navigator.onLine && (
-                    <div className="flex items-center gap-2 text-[10px] text-mc-red font-bold uppercase animate-pulse mb-1">
-                      <div className="w-1.5 h-1.5 bg-mc-red rounded-full" />
-                      Offline - Warte auf Verbindung...
+              <div className="flex flex-col gap-2">
+                {!navigator.onLine && (
+                  <div className="flex items-center gap-2 text-[10px] text-mc-red font-bold uppercase animate-pulse mb-1">
+                    <div className="w-1.5 h-1.5 bg-mc-red rounded-full" />
+                    Offline - Warte auf Verbindung...
+                  </div>
+                )}
+                
+                {/* Gastname Input for non-logged-in users */}
+                {!user && (
+                  <div className="flex items-center justify-between gap-2 px-1 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Gastname:</span>
+                      <input
+                        type="text"
+                        value={chatGuestName}
+                        onChange={(e) => {
+                          const val = e.target.value.substring(0, 24);
+                          localStorage.setItem('suggestions_guest_name', val);
+                          setChatGuestName(val);
+                        }}
+                        placeholder={`Gast-${guestId.substring(6, 12)}`}
+                        className="bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-xs text-white outline-none focus:border-mc-red transition-colors w-[130px]"
+                      />
                     </div>
-                  )}
-                  <form onSubmit={sendMessage} className="flex gap-2">
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setShowCommandMenu(!showCommandMenu)}
-                      className={`p-3 rounded-xl transition-all border ${showCommandMenu ? 'bg-mc-red text-white border-mc-red' : 'bg-neutral-900 text-neutral-500 border-neutral-800 hover:border-neutral-700'}`}
-                      title="Schnelle Befehle"
+                      onClick={() => setShowLoginModal(true)}
+                      className="text-[10px] text-mc-gold hover:underline font-bold uppercase tracking-wider"
                     >
-                      <Command size={20} />
+                      Anmelden
                     </button>
-                    <input 
-                      type="file"
-                      accept="image/*"
-                      id="chat-image-upload"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file && user) {
-                           try {
-                             // Assuming triggerToast is in scope. It probably is.
-                             const base64 = await compressAndResizeImage(file, 800, 800, 0.6);
-                             await addDoc(collection(db, 'chat_messages'), {
-                               text: '',
-                               imageUrl: base64,
-                               userId: user.uid,
-                               displayName: myProfile?.displayName || user.displayName || 'Unknown',
-                               role: myProfile?.role || 'Member',
-                               purchasedRank: myProfile?.purchasedRank || 'undefined',
-                               channel: chatChannel,
-                               createdAt: serverTimestamp()
-                             });
-                             // Reset input so we can select the same file again if needed
-                             e.target.value = '';
-                           } catch (err) {
-                             console.error("Image upload error", err);
-                           }
-                        }
-                      }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => document.getElementById('chat-image-upload')?.click()}
-                      className="p-3 rounded-xl transition-all border bg-neutral-900 text-neutral-500 border-neutral-800 hover:border-neutral-700 hover:text-white"
-                      title="Bild hochladen"
-                    >
-                      <ImageIcon size={20} />
-                    </button>
-                    <input 
-                      type="text" 
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="Sende eine Nachricht oder /Befehl..."
-                      className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:border-mc-red outline-none transition-colors"
-                    />
-                    <button 
-                      type="submit"
-                      className="p-3 bg-mc-red rounded-xl hover:bg-mc-red/90 transition-colors"
-                    >
-                      <ChevronRight size={20} />
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => setShowLoginModal(true)}
-                  className="w-full py-3 bg-neutral-800 rounded-xl text-neutral-400 text-sm font-medium hover:bg-neutral-700 transition-colors"
-                >
-                  Anmelden zum Chatten
-                </button>
-              )}
+                  </div>
+                )}
+
+                <form onSubmit={sendMessage} className="flex gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowCommandMenu(!showCommandMenu)}
+                    className={`p-3 rounded-xl transition-all border ${showCommandMenu ? 'bg-mc-red text-white border-mc-red' : 'bg-neutral-900 text-neutral-500 border-neutral-800 hover:border-neutral-700'}`}
+                    title="Schnelle Befehle"
+                  >
+                    <Command size={20} />
+                  </button>
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    id="chat-image-upload"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                         try {
+                           // Assuming compressAndResizeImage is defined and returns a base64 string
+                           const base64 = await compressAndResizeImage(file, 800, 800, 0.6);
+                           const fallbackDisp = chatGuestName || 'Gast-' + guestId.substring(6, 12);
+                           const resolvedDisp = user ? (myProfile?.displayName || user.displayName || 'Unknown') : fallbackDisp;
+                           const resolvedRole = user ? (myProfile?.role || 'Member') : 'Gast';
+                           
+                           await addDoc(collection(db, 'chat_messages'), {
+                             text: '',
+                             imageUrl: base64,
+                             userId: user ? user.uid : guestId,
+                             displayName: resolvedDisp,
+                             role: resolvedRole,
+                             purchasedRank: user ? (myProfile?.purchasedRank || 'undefined') : '',
+                             channel: chatChannel,
+                             createdAt: serverTimestamp()
+                           });
+                           // Reset input so we can select the same file again if needed
+                           e.target.value = '';
+                         } catch (err) {
+                           console.error("Image upload error", err);
+                         }
+                      }
+                    }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => document.getElementById('chat-image-upload')?.click()}
+                    className="p-3 rounded-xl transition-all border bg-neutral-900 text-neutral-500 border-neutral-800 hover:border-neutral-700 hover:text-white"
+                    title="Bild hochladen"
+                  >
+                    <ImageIcon size={20} />
+                  </button>
+                  <input 
+                    type="text" 
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Sende eine Nachricht oder /Befehl..."
+                    className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:border-mc-red outline-none transition-colors"
+                  />
+                  <button 
+                    type="submit"
+                    className="p-3 bg-mc-red rounded-xl hover:bg-mc-red/90 transition-colors"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </form>
+              </div>
             </div>
           </motion.div>
         )}
