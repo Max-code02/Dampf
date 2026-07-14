@@ -1138,7 +1138,41 @@ const clientQuizQuestions = [
   { question: "Aus wie vielen Fäden stellt man einen Block Wolle her?", answers: ["4", "vier"] },
   { question: "Welcher Gegenstand schützt den Spieler im Nether vor Angriffen der Piglins?", answers: ["goldrüstung", "gold", "goldhelm", "goldhose", "goldbrustplatte", "goldschuhe"] },
   { question: "Welcher Trank schwächt feindliche Mobs und reduziert ihren Schaden?", answers: ["schwäche", "schwächetrank"] },
-  { question: "Wie viele Obsidianblöcke benötigt man, um einen Zaubertisch herzustellen?", answers: ["4", "vier"] }
+  { question: "Wie viele Obsidianblöcke benötigt man, um einen Zaubertisch herzustellen?", answers: ["4", "vier"] },
+  
+  // Neue Minecraft Quizfragen
+  { question: "Wie viele Diamanten benötigt man für eine vollständige Diamantrüstung?", answers: ["24", "vierundzwanzig"] },
+  { question: "Aus wie vielen Weizen-Einheiten backt man ein Brot?", answers: ["3", "drei"] },
+  { question: "Welchen Gegenstand benötigt man zwingend, um ein Schwein oder Pferd zu reiten?", answers: ["sattel"] },
+  { question: "Wie heißt der dreiköpfige Boss-Mob, den der Spieler mit Seelensand und Köpfen selbst beschwören kann?", answers: ["wither"] },
+  { question: "Welches Haustier lockt man mit rohem Kabeljau oder Lachs an?", answers: ["katze", "katzen", "oszelot", "ozelot"] },
+  { question: "Welche Pflanze fressen Pandas am liebsten?", answers: ["bambus"] },
+  { question: "Welcher fliegende, weiße Mob im Nether schießt mit explosiven Feuerbällen?", answers: ["ghast", "gast"] },
+  { question: "Aus wie vielen Eisenbarren stellt man einen massiven Eisenblock her?", answers: ["9", "neun"] },
+  { question: "Wie heißt der rote, hochexplosive Block, der aus Sand und Schwarzpulver hergestellt wird?", answers: ["tnt", "dynamit"] },
+  { question: "Aus welchem Gestein besteht das unzerstörbare Fundament ganz unten in der Oberwelt?", answers: ["grundgestein", "bedrock"] },
+  { question: "Welches legendäre Minecraft-Studio hat das Spiel ursprünglich entwickelt?", answers: ["mojang", "mojang studios"] },
+  { question: "Wie heißt das fliegende Schiff, das man manchmal in den End-Städten findet?", answers: ["endschiff", "end-schiff", "end schiff"] },
+  { question: "In welchem Biom generieren Hexenhütten natürlicherweise?", answers: ["sumpf", "sumpfbiom", "sümpfe"] },
+  { question: "Welcher Trank erhöht die Sprunghöhe des Spielers?", answers: ["sprungkraft", "sprungkrafttrank", "trank der sprungkraft"] },
+  { question: "Welcher seltene Gegenstand ermöglicht es dem Spieler, durch die Luft zu gleiten?", answers: ["elytra", "elytren"] },
+  { question: "Welcher gigantische, blinde und extrem starke Mob bewacht die Tiefen des Deep Dark?", answers: ["warden"] },
+  { question: "Welcher Gegenstand leitet Redstone-Signale über weite Strecken wie ein Kabel?", answers: ["redstone", "redstonestaub", "redstone-staub"] },
+  { question: "Wie viele Holzstufen (Slabs) benötigt man, um ein Rezept für ein Boot zu füllen?", answers: ["5", "fünf"] },
+  { question: "Welches Haustier kann man mit Karotten, Äpfeln oder goldenen Karotten züchten?", answers: ["pferd", "pferde", "esel"] },
+  { question: "Welches Erz schmilzt man, um Kupferbarren zu erhalten?", answers: ["kupfer", "kupfererz", "rohkuper", "rohkupfer"] },
+  { question: "Mit welchem Item kann man schwebende Phantome (Phantoms) vertreiben? (Ein friedlicher Mob)", answers: ["katze", "katzen"] },
+  { question: "Wie heißt das Erz, das man abbaut, um Redstone-Staub zu erhalten?", answers: ["redstoneerz", "redstone-erz"] },
+  { question: "Welche Scheibe oder Musikplatte ist die seltenste und wurde von C418 komponiert?", answers: ["11", "pigstep"] },
+  { question: "Aus welchem Holz wird der hellste Holztyp (Birke) gewonnen?", answers: ["birke", "birkeneiche", "birkenholz"] },
+  { question: "Wie heißt der feindliche Meeres-Mob mit einem Dreizack, der im Wasser spawnt?", answers: ["ertrunkener", "ertrunkene", "drowned"] },
+  { question: "Aus wie vielen Goldbarren craftet man einen Goldblock?", answers: ["9", "neun"] },
+  { question: "Wie heißt das Biom im Nether mit riesigen blauen Pilzbäumen?", answers: ["wirrwald", "warped forest"] },
+  { question: "Welcher friedliche Mob aus der 1.17 leuchtet unter Wasser und kann in Eimern transportiert werden?", answers: ["axolotl"] },
+  { question: "Aus welcher Nutzpflanze stellt man Zucker und Papier her?", answers: ["zuckerrohr"] },
+  { question: "Wie viele Wolle-Blöcke braucht man, um ein Bett zu craften?", answers: ["3", "drei"] },
+  { question: "Wie viele Holzbretter braucht man für eine Werkbank (Crafting Table)?", answers: ["4", "vier"] },
+  { question: "Welcher unheimliche Mob hinterlässt eine Perle, mit der man sich teleportieren kann?", answers: ["enderman", "endermann"] }
 ];
 
 export default function App() {
