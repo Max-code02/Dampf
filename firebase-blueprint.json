@@ -323,9 +323,28 @@
         }
       },
       "required": ["title", "description", "authorId", "authorName", "createdAt", "status", "upvotes", "upvotedBy", "downvotes", "downvotedBy", "comments"]
+    },
+    "CoinTransaction": {
+      "title": "Coin Transaction",
+      "description": "A record of a /pay coin transfer between players",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "description": "The UID of the sender" },
+        "senderName": { "type": "string", "description": "The display name of the sender" },
+        "receiverId": { "type": "string", "description": "The UID of the receiver" },
+        "receiverName": { "type": "string", "description": "The display name of the receiver" },
+        "amount": { "type": "integer", "description": "The number of coins transferred" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "trackingId": { "type": "string", "description": "The unique tracking ID for the transaction" }
+      },
+      "required": ["senderId", "senderName", "receiverId", "receiverName", "amount", "createdAt", "trackingId"]
     }
   },
   "firestore": {
+    "coin_transactions/{transactionId}": {
+      "schema": "CoinTransaction",
+      "description": "Log records for /pay currency transfers"
+    },
     "shared_backgrounds/{bgId}": {
       "schema": "SharedBackground",
       "description": "Wallpapers uploaded and shared by community players"

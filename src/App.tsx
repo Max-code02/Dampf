@@ -90,6 +90,7 @@ import {
   SunDim,
   Lightbulb,
   ChevronUp,
+  Search,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { QuizArenaView } from './components/QuizArenaView';
@@ -1172,7 +1173,28 @@ const clientQuizQuestions = [
   { question: "Aus welcher Nutzpflanze stellt man Zucker und Papier her?", answers: ["zuckerrohr"] },
   { question: "Wie viele Wolle-Blöcke braucht man, um ein Bett zu craften?", answers: ["3", "drei"] },
   { question: "Wie viele Holzbretter braucht man für eine Werkbank (Crafting Table)?", answers: ["4", "vier"] },
-  { question: "Welcher unheimliche Mob hinterlässt eine Perle, mit der man sich teleportieren kann?", answers: ["enderman", "endermann"] }
+  { question: "Welcher unheimliche Mob hinterlässt eine Perle, mit der man sich teleportieren kann?", answers: ["enderman", "endermann"] },
+  { question: "Wie heißt das Biom im Nether mit riesigen roten Pilzbäumen?", answers: ["karmesinwald", "crimson forest"] },
+  { question: "Welcher Trank schützt den Spieler vor Feuerschaden und Lava?", answers: ["feuerresistenz", "feuerresistenztrank", "trank der feuerresistenz"] },
+  { question: "Welchen Fisch fressen Ozelots oder Katzen am liebsten?", answers: ["kabeljau", "lachs", "fisch"] },
+  { question: "Aus wie vielen Eisenbarren craftet man eine Eisenschaufel?", answers: ["1", "eins"] },
+  { question: "Wie viele Wolle-Blöcke benötigt man, um ein Gemälde (Painting) zu craften?", answers: ["1", "eins"] },
+  { question: "Mit welchem Erz im Nether stellt man Quarzblöcke her?", answers: ["netherquarz", "quarz", "netherquarzerz", "nether-quarz"] },
+  { question: "Welcher Trank erhöht die Sichtbarkeit unter Wasser oder im Dunkeln?", answers: ["nachtsicht", "nachtsichttrank", "trank der nachtsicht"] },
+  { question: "Aus wie vielen Papier-Einheiten und Leder craftet man ein Buch?", answers: ["3", "drei"] },
+  { question: "Wie heißt die Dimension, in die man mit einem Obsidianportal gelangt?", answers: ["nether", "die hölle", "hölle"] },
+  { question: "Wie heißt der pelzige, gelbe Mob, der Honig produziert?", answers: ["biene", "bienen"] },
+  { question: "Welches Gestein im Nether brennt ewig, wenn man es anzündet?", answers: ["netherrack"] },
+  { question: "Welchen Trank verwendet man, um Zombie-Villager zu heilen?", answers: ["schwäche", "schwächetrank"] },
+  { question: "Aus wie vielen Kohle-Einheiten craftet man einen Kohleblock?", answers: ["9", "neun"] },
+  { question: "Welchen friedlichen Mob aus der 1.19 kann man Items einsammeln lassen?", answers: ["allay"] },
+  { question: "Wie heißt der schwebende Mob im End, der Schalen für Kisten droppt?", answers: ["shulker"] },
+  { question: "Welches Werkzeug baut Laub am schnellsten ab und hinterlässt ganze Blätter?", answers: ["schere", "shears"] },
+  { question: "Wie viele Wither-Skelett-Schädel benötigt man, um einen Wither zu beschwören?", answers: ["3", "drei"] },
+  { question: "Aus welchem Material stellt man Eimer her?", answers: ["eisen", "eisenbarren"] },
+  { question: "Welches Nahrungsmittel wächst an Eichenbäumen und kann vergoldet sein?", answers: ["apfel", "goldener apfel", "äpfel"] },
+  { question: "Wie viele Stöcke (Sticks) benötigt man für eine Leiter?", answers: ["7", "sieben"] },
+  { question: "Welcher grüne Block federt den Spieler ab und lässt ihn hochfedern?", answers: ["schleimblock", "slimeblock", "schleim", "slime"] }
 ];
 
 export default function App() {
@@ -2492,46 +2514,65 @@ export default function App() {
   }, []);
   const [floatingRewards, setFloatingRewards] = useState<{ id: string | number, text: string, x: number, y: number, color: string }[]>([]);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
-  const [leaderboardTab, setLeaderboardTab] = useState<'coins' | 'quiz'>('coins');
+  const [leaderboardTab, setLeaderboardTab] = useState<'coins' | 'quiz' | 'transactions'>('coins');
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
   const [lastLeaderboardFetch, setLastLeaderboardFetch] = useState<number>(0);
+  const [transactionsList, setTransactionsList] = useState<any[]>([]);
+  const [txSearchQuery, setTxSearchQuery] = useState<string>('');
 
-  const fetchLeaderboard = async (tabOverride?: 'coins' | 'quiz', force: boolean = false) => {
+  const fetchLeaderboard = async (tabOverride?: 'coins' | 'quiz' | 'transactions', force: boolean = false) => {
     const activeTab = tabOverride || leaderboardTab;
     const isTabChange = tabOverride && tabOverride !== leaderboardTab;
-    if (!force && !isTabChange && Date.now() - lastLeaderboardFetch < 30000 && leaderboardData.length > 0) return;
+    if (!force && !isTabChange && Date.now() - lastLeaderboardFetch < 30000 && (activeTab === 'transactions' ? transactionsList.length > 0 : leaderboardData.length > 0)) return;
     
-    setLeaderboardData([]); // clear to trigger loading spinner
-    try {
-      let q;
-      if (activeTab === 'quiz') {
-        q = query(collection(db, 'user_profiles'), orderBy('quizWins', 'desc'), limit(50));
-      } else {
-        q = query(collection(db, 'user_profiles'), orderBy('coins', 'desc'), limit(50));
+    if (activeTab === 'transactions') {
+      try {
+        const txQuery = query(collection(db, 'coin_transactions'), orderBy('createdAt', 'desc'), limit(100));
+        const txSnap = await getDocs(txQuery);
+        const txData = txSnap.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          createdAt: doc.data().createdAt?.toDate() || new Date()
+        }));
+        setTransactionsList(txData);
+        setLastLeaderboardFetch(Date.now());
+      } catch (txErr: any) {
+        if (txErr.message?.includes('Quota')) setHasQuotaExceeded(true);
+        console.error("Transactions fetch error:", txErr);
       }
-      const snap = await getDocs(q);
-      const rawData = snap.docs.map(doc => ({ ...(doc.data() as any), id: doc.id } as any));
-      
-      const seenNames = new Set<string>();
-      const seenUserIds = new Set<string>();
-      const dedupedData: UserProfile[] = [];
-      
-      rawData.forEach(profile => {
-        const userId = profile.userId || profile.id;
-        const nameKey = (profile.minecraftUsername || profile.displayName || userId || '').trim().toLowerCase();
-        
-        if (userId && !seenUserIds.has(userId) && nameKey && !seenNames.has(nameKey)) {
-          seenUserIds.add(userId);
-          seenNames.add(nameKey);
-          dedupedData.push(profile);
+    } else {
+      setLeaderboardData([]); // clear to trigger loading spinner
+      try {
+        let q;
+        if (activeTab === 'quiz') {
+          q = query(collection(db, 'user_profiles'), orderBy('quizWins', 'desc'), limit(50));
+        } else {
+          q = query(collection(db, 'user_profiles'), orderBy('coins', 'desc'), limit(50));
         }
-      });
+        const snap = await getDocs(q);
+        const rawData = snap.docs.map(doc => ({ ...(doc.data() as any), id: doc.id } as any));
+        
+        const seenNames = new Set<string>();
+        const seenUserIds = new Set<string>();
+        const dedupedData: UserProfile[] = [];
+        
+        rawData.forEach(profile => {
+          const userId = profile.userId || profile.id;
+          const nameKey = (profile.minecraftUsername || profile.displayName || userId || '').trim().toLowerCase();
+          
+          if (userId && !seenUserIds.has(userId) && nameKey && !seenNames.has(nameKey)) {
+            seenUserIds.add(userId);
+            seenNames.add(nameKey);
+            dedupedData.push(profile);
+          }
+        });
 
-      setLeaderboardData(dedupedData);
-      setLastLeaderboardFetch(Date.now());
-    } catch (err: any) {
-      if (err.message?.includes('Quota')) setHasQuotaExceeded(true);
-      console.error("Leaderboard fetch error:", err);
+        setLeaderboardData(dedupedData);
+        setLastLeaderboardFetch(Date.now());
+      } catch (err: any) {
+        if (err.message?.includes('Quota')) setHasQuotaExceeded(true);
+        console.error("Leaderboard fetch error:", err);
+      }
     }
   };
 
@@ -6443,12 +6484,31 @@ export default function App() {
               break;
             }
             
+            // Generate tracking ID
+            const trackingId = `TX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
             // Flush any pending clicks/CPS earnings first to secure all progress
             await flushCoinsAndXp();
             
             await updateDoc(doc(db, 'user_profiles', user.uid), { coins: increment(-amount) });
             await updateDoc(doc(db, 'user_profiles', targetProf.userId), { coins: increment(amount) });
             
+            // Log to coin_transactions collection
+            try {
+              await addDoc(collection(db, 'coin_transactions'), {
+                senderId: user.uid,
+                senderName: myProfile?.displayName || 'Unbekannt',
+                receiverId: targetProf.userId,
+                receiverName: targetProf.displayName || 'Unbekannt',
+                amount: amount,
+                createdAt: serverTimestamp(),
+                trackingId: trackingId
+              });
+            } catch (txErr) {
+              console.error("Fehler beim Speichern der Transaktion:", txErr);
+              handleFirestoreError(txErr, OperationType.WRITE, 'coin_transactions');
+            }
+
             // Discord Transaction Log
             notifyDiscord(
               "💸 COIN-TRANSFER PROTOKOLL",
@@ -6458,7 +6518,7 @@ export default function App() {
                 { name: "📤 Sender", value: myProfile?.displayName || 'N/A', inline: true },
                 { name: "📥 Empfänger", value: targetProf.displayName || 'N/A', inline: true },
                 { name: "💰 Volumen", value: `${amount} Coins`, inline: true },
-                { name: "🛰️ Tracking-ID", value: `TX-${Math.random().toString(36).substring(7).toUpperCase()}`, inline: false }
+                { name: "🛰️ Tracking-ID", value: trackingId, inline: false }
               ]
             );
 
@@ -11494,7 +11554,11 @@ export default function App() {
                     <div>
                       <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">Globales Leaderboard</h2>
                       <p className="text-[10px] text-mc-gold/60 font-bold uppercase tracking-widest mt-1 italic">
-                        {leaderboardTab === 'quiz' ? 'Wer hat die meisten Fragen gelöst?' : 'Wer sind die reichsten Spieler?'}
+                        {leaderboardTab === 'quiz' 
+                          ? 'Wer hat die meisten Fragen gelöst?' 
+                          : leaderboardTab === 'transactions' 
+                            ? 'Lückenloses Audit-Protokoll & globale Statistiken' 
+                            : 'Wer sind die reichsten Spieler?'}
                       </p>
                     </div>
                   </div>
@@ -11507,26 +11571,26 @@ export default function App() {
                 </div>
 
                 {/* Horizontal Category Switcher */}
-                <div className="px-8 py-3 border-b border-white/5 bg-black/40 flex gap-4">
+                <div className="px-8 py-3 border-b border-white/5 bg-black/40 flex flex-wrap gap-2 md:gap-4">
                   <button
                     onClick={() => {
                       setLeaderboardTab('coins');
                       fetchLeaderboard('coins');
                     }}
-                    className={`flex-1 py-2.5 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${
                       leaderboardTab === 'coins'
                         ? 'bg-mc-gold/20 border-mc-gold text-mc-gold shadow-[0_0_15px_rgba(255,170,0,0.15)]'
                         : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    🪙 Münzen-Toplist
+                    🪙 Münzen
                   </button>
                   <button
                     onClick={() => {
                       setLeaderboardTab('quiz');
                       fetchLeaderboard('quiz');
                     }}
-                    className={`flex-1 py-2.5 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${
                       leaderboardTab === 'quiz'
                         ? 'bg-mc-gold/20 border-mc-gold text-mc-gold shadow-[0_0_15px_rgba(255,170,0,0.15)]'
                         : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5'
@@ -11534,11 +11598,159 @@ export default function App() {
                   >
                     💡 Quiz-Siege
                   </button>
+                  <button
+                    onClick={() => {
+                      setLeaderboardTab('transactions');
+                      fetchLeaderboard('transactions');
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${
+                      leaderboardTab === 'transactions'
+                        ? 'bg-mc-gold/20 border-mc-gold text-mc-gold shadow-[0_0_15px_rgba(255,170,0,0.15)]'
+                        : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    💸 Transaktionen
+                  </button>
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
-                  {leaderboardData.length === 0 ? (
+                  {leaderboardTab === 'transactions' ? (
+                    <div className="space-y-6">
+                      {/* Financial Audit Bento Metrics */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-black/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                          <span className="text-[8px] font-black uppercase text-neutral-500 tracking-widest leading-none">Umlaufmenge</span>
+                          <div className="mt-2 flex items-baseline gap-1">
+                            <span className="text-base font-black text-white italic tracking-tighter">
+                              {userProfiles.reduce((acc, p) => acc + (p.coins || 0), 0).toLocaleString('de-DE')}
+                            </span>
+                            <span className="text-[8px] font-bold text-mc-gold uppercase">Coins</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-black/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                          <span className="text-[8px] font-black uppercase text-neutral-500 tracking-widest leading-none">Ø Kontostand</span>
+                          <div className="mt-2 flex items-baseline gap-1">
+                            <span className="text-base font-black text-white italic tracking-tighter">
+                              {userProfiles.length > 0 
+                                ? Math.round(userProfiles.reduce((acc, p) => acc + (p.coins || 0), 0) / userProfiles.length).toLocaleString('de-DE') 
+                                : '0'
+                              }
+                            </span>
+                            <span className="text-[8px] font-bold text-mc-gold uppercase">Coins</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-black/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                          <span className="text-[8px] font-black uppercase text-neutral-500 tracking-widest leading-none">Transaktionen</span>
+                          <div className="mt-2 flex items-baseline gap-1">
+                            <span className="text-base font-black text-white italic tracking-tighter">
+                              {transactionsList.length.toLocaleString('de-DE')}
+                            </span>
+                            <span className="text-[8px] font-bold text-blue-400 uppercase">Audit-Logs</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-black/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                          <span className="text-[8px] font-black uppercase text-neutral-500 tracking-widest leading-none">Max. Transfer</span>
+                          <div className="mt-2 flex items-baseline gap-1">
+                            <span className="text-base font-black text-white italic tracking-tighter">
+                              {transactionsList.length > 0 
+                                ? Math.max(...transactionsList.map(t => t.amount || 0)).toLocaleString('de-DE') 
+                                : '0'
+                              }
+                            </span>
+                            <span className="text-[8px] font-bold text-mc-gold uppercase">Coins</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filter Search Input */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Audit-Protokoll durchsuchen (Sender, Empfänger, TX-ID)..."
+                          value={txSearchQuery}
+                          onChange={(e) => setTxSearchQuery(e.target.value)}
+                          className="w-full bg-black/40 border border-white/5 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold text-white placeholder-neutral-500 focus:outline-none focus:border-mc-gold/30 focus:bg-black/60 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]"
+                        />
+                        <Search size={16} className="absolute left-4 top-3.5 text-neutral-500" />
+                        {txSearchQuery && (
+                          <button 
+                            onClick={() => setTxSearchQuery('')} 
+                            className="absolute right-4 top-3.5 text-mc-gold hover:text-white text-[9px] font-black uppercase tracking-widest"
+                          >
+                            Zurücksetzen
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Transactions Audit List */}
+                      <div className="space-y-2">
+                        {transactionsList.filter(t => {
+                          const queryVal = txSearchQuery.toLowerCase().trim();
+                          if (!queryVal) return true;
+                          return (t.senderName || '').toLowerCase().includes(queryVal) ||
+                                 (t.receiverName || '').toLowerCase().includes(queryVal) ||
+                                 (t.trackingId || '').toLowerCase().includes(queryVal);
+                        }).length === 0 ? (
+                          <div className="py-12 bg-black/20 rounded-2xl border border-white/5 text-center">
+                            <Activity className="mx-auto text-neutral-600 mb-2 animate-pulse" size={24} />
+                            <p className="text-neutral-500 text-[10px] uppercase font-black tracking-widest">Keine Transaktionen gefunden</p>
+                          </div>
+                        ) : (
+                          transactionsList
+                            .filter(t => {
+                              const queryVal = txSearchQuery.toLowerCase().trim();
+                              if (!queryVal) return true;
+                              return (t.senderName || '').toLowerCase().includes(queryVal) ||
+                                     (t.receiverName || '').toLowerCase().includes(queryVal) ||
+                                     (t.trackingId || '').toLowerCase().includes(queryVal);
+                            })
+                            .map((tx, idx) => (
+                              <motion.div
+                                key={tx.id || `tx-${idx}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.03 }}
+                                className="bg-black/30 border border-white/5 p-4 rounded-2xl hover:border-white/10 transition-colors flex items-center justify-between gap-4"
+                              >
+                                <div className="flex items-center gap-3">
+                                  {/* Icon indicator */}
+                                  <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 text-neutral-400">
+                                    <Activity size={16} className="text-mc-gold" />
+                                  </div>
+
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-black uppercase text-white tracking-tight">{tx.senderName}</span>
+                                      <span className="text-[9px] text-neutral-600 font-bold uppercase tracking-widest">an</span>
+                                      <span className="text-xs font-black uppercase text-mc-gold tracking-tight">{tx.receiverName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-[8px] font-mono text-neutral-500 bg-neutral-800/50 px-1.5 py-0.5 rounded tracking-widest uppercase">
+                                        {tx.trackingId || 'TX-GENERIC'}
+                                      </span>
+                                      <span className="text-[8px] text-neutral-500 font-bold">
+                                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Gerade eben'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-black text-white italic tracking-tighter flex items-center gap-1">
+                                    {tx.amount?.toLocaleString('de-DE')} <span className="text-mc-gold text-[10px] not-italic font-black">C</span>
+                                  </span>
+                                  <span className="text-[7px] text-neutral-600 uppercase font-black tracking-widest">Überwiesen</span>
+                                </div>
+                              </motion.div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                  ) : leaderboardData.length === 0 ? (
                     <div className="py-20 text-center">
                       <RefreshCw className="mx-auto text-mc-gold/20 animate-spin mb-4" size={40} />
                       <p className="text-neutral-500 uppercase font-black text-xs tracking-widest">Lade Daten aus dem Multiversum...</p>

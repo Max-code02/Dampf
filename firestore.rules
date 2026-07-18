@@ -90,6 +90,19 @@ service cloud.firestore {
              (!('purchasedRank' in data) || (data.purchasedRank is string && data.purchasedRank.size() <= 64));
     }
 
+    // CoinTransaction Validation
+    function isValidCoinTransaction(data) {
+      return data.keys().hasAll(['senderId', 'senderName', 'receiverId', 'receiverName', 'amount', 'createdAt', 'trackingId']) &&
+             data.keys().size() == 7 &&
+             data.senderId is string &&
+             data.senderName is string && data.senderName.size() <= 64 &&
+             data.receiverId is string &&
+             data.receiverName is string && data.receiverName.size() <= 64 &&
+             data.amount is int && data.amount > 0 &&
+             (data.createdAt == request.time || data.createdAt is timestamp) &&
+             data.trackingId is string && data.trackingId.size() <= 64;
+    }
+
     // Player Validation
     function isValidPlayer(data) {
       return data.keys().hasAll(['username', 'server', 'lastSeen']) &&
@@ -403,6 +416,15 @@ service cloud.firestore {
         incoming().status == existing().status &&
         incoming().diff(existing()).affectedKeys().hasOnly(['upvotes', 'upvotedBy', 'downvotes', 'downvotedBy', 'comments'])
       );
+    }
+
+    // Coin Transactions Collection
+    match /coin_transactions/{transactionId} {
+      allow read: if true;
+      allow create: if isSignedIn() && 
+                    incoming().senderId == request.auth.uid && 
+                    isValidCoinTransaction(incoming());
+      allow update, delete: if false;
     }
   }
 }
