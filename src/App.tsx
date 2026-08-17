@@ -4319,90 +4319,8 @@ export default function App() {
     }
   };
 
-  const loginWithDiscord = async () => {
-    const providerId = import.meta.env.VITE_DISCORD_PROVIDER_ID || 'discord.com';
-    console.log("[OAUTH] Attempting Discord Login with Provider ID:", providerId);
-    
-    try {
-      setLoginError(null);
-      
-      const provider = new OAuthProvider(providerId);
-      
-      // Determine scopes based on provider naming convention
-      // If it's an OIDC provider, we use 'openid', 'profile', 'email'
-      // If it's a standard Discord OAuth provider, we use 'identify', 'email'
-      if (providerId.toLowerCase().includes('oidc')) {
-        provider.addScope('openid');
-        provider.addScope('email');
-        provider.addScope('profile');
-      } else {
-        provider.addScope('identify');
-        provider.addScope('email');
-      }
-
-      const result = await signInWithPopup(auth, provider);
-      if (result.user) {
-        // Prevent resetting coins or rank of returning users by validating existence first
-        const pRef = doc(db, 'user_profiles', result.user.uid);
-        const pSnap = await getDoc(pRef);
-        
-        if (!pSnap.exists()) {
-          // Create default profile for NEW user
-          await setDoc(pRef, {
-            userId: result.user.uid,
-            displayName: result.user.displayName || 'Unbekannt',
-            minecraftUsername: result.user.displayName || '',
-            role: 'Member',
-            coins: 100,
-            xp: 0,
-            isOnline: true,
-            currentServer: 'none',
-            isShadowMuted: false,
-            isInvisible: false,
-            updatedAt: serverTimestamp(),
-            createdAt: serverTimestamp()
-          });
-        } else {
-          // Returning user: Just update online status and general login details
-          await setDoc(pRef, {
-            isOnline: true,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        }
-
-        setShowLoginModal(false);
-        notifyDiscord(
-          "🎮 DISCORD-LOGIN ERFOLGREICH",
-          `Profil: ${result.user.displayName}`,
-          5793266,
-          [
-            { name: "👤 User", value: result.user.displayName || 'Unbekannt', inline: true },
-            { name: "📧 Mail", value: result.user.email || 'N/A', inline: true }
-          ]
-        );
-      }
-    } catch (error: any) {
-      console.error("[OAUTH] Discord Login Error:", error);
-      
-      if (error.code === 'auth/cancelled-popup-request') {
-        return; // Ignore internal cancellation
-      }
-      
-      if (error.code === 'auth/popup-closed-by-user') {
-        setLoginError("Anmeldung abgebrochen.");
-        return;
-      }
-
-      if (error.code === 'auth/operation-not-allowed') {
-        setLoginError(`Der Provider '${providerId}' ist in Firebase nicht AKTIVIERT. Geh in 'Authentication' -> 'Sign-in method' und aktiviere deinen Discord-Anbieter.`);
-      } else if (error.code === 'auth/unauthorized-domain') {
-        setLoginError(`Diese Domain (${window.location.hostname}) ist in Firebase nicht autorisiert.`);
-      } else if (error.code === 'auth/argument-error') {
-        setLoginError(`Ungültiger Provider ID: ${providerId}`);
-      } else {
-        setLoginError(`Fehler: ${error.message || error.code}`);
-      }
-    }
+  const loginWithDiscord = () => {
+    window.location.href = 'https://discordtest-n1iq.onrender.com/';
   };
 
   const handleAuth = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -14553,14 +14471,11 @@ export default function App() {
 
                   <button 
                     onClick={loginWithDiscord}
-                    className="w-full px-6 py-4 rounded-xl font-bold bg-[#5865F2] text-white hover:bg-[#4752C4] transition-all flex items-center justify-center gap-2"
+                    className="w-full px-6 py-4 rounded-xl font-bold bg-[#5865F2] text-white hover:bg-[#4752C4] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#5865F2]/20"
                   >
                     <Globe size={18} />
-                    Mit Discord anmelden
+                    Mit Discord einloggen
                   </button>
-                  <div className="text-[10px] text-center text-neutral-600 opacity-50 -mt-2">
-                    ID: {import.meta.env.VITE_DISCORD_PROVIDER_ID || 'discord.com'}
-                  </div>
 
                   <button 
                     onClick={() => setIsRegistering(!isRegistering)}
