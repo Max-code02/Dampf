@@ -1197,6 +1197,8 @@ const clientQuizQuestions = [
   { question: "Welcher grüne Block federt den Spieler ab und lässt ihn hochfedern?", answers: ["schleimblock", "slimeblock", "schleim", "slime"] }
 ];
 
+const IS_HANDY_MODE = typeof window !== 'undefined' && window.location.pathname.includes('handy.html');
+
 export default function App() {
   // Quota state
   const [hasQuotaExceeded, setHasQuotaExceeded] = useState(false);
@@ -9925,7 +9927,7 @@ export default function App() {
       {/* Unified Expandable Adventure Menu (FAB) - Hide when any overlay is open */}
       <AnimatePresence>
         {!isAnyOverlayOpen && (
-          <div className="fixed bottom-8 right-8 z-[120] flex flex-col items-end gap-3 pointer-events-none">
+          <div className={`fixed z-[120] pointer-events-none transition-all ${IS_HANDY_MODE ? 'bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 w-full max-w-[90vw]' : 'bottom-8 right-8 flex flex-col items-end gap-3'}`}>
             {/* Expanded items list */}
             {isFabMenuOpen && (
               <motion.div
@@ -12142,7 +12144,7 @@ export default function App() {
       <main className={`relative z-10 max-w-7xl mx-auto px-6 py-12 md:py-24 transition-all duration-500 ${isAnyOverlayOpen ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
 
         {/* Hero Section */}
-        <div className="max-w-3xl mb-20 text-center mx-auto md:text-left md:mx-0">
+        <div className={`max-w-3xl mb-20 mx-auto ${IS_HANDY_MODE ? 'text-center mt-12 px-2 flex flex-col items-center' : 'text-center md:text-left md:mx-0'}`}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -12164,7 +12166,7 @@ export default function App() {
                 : "Willkommen auf dem Hub des besten Minecraft Realms. Entdecke neue Welten, nimm an Events teil und werde Teil unserer wachsenden Community."
               }
             </p>
-            <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+            <div className={`flex gap-4 ${IS_HANDY_MODE ? 'flex-col w-full mt-8' : 'flex-wrap justify-center md:justify-start'}`}>
               {(false && (myProfile?.role === 'Owner' || myProfile?.role === 'Root' || isOwner || isSuperAdmin)) && (
                 <button 
                   onClick={() => {
@@ -12188,14 +12190,14 @@ export default function App() {
                   navigator.clipboard.writeText(directLink);
                   triggerToast('quest', 'LINK KOPIERT 📋', 'Der Direktspiel-Link (https://dampf.mypi.co/) wurde kopiert!');
                 }}
-                className="mc-button mc-button-secondary flex items-center gap-2 px-6 py-3 rounded-xl border border-neutral-800 hover:border-emerald-500 hover:text-emerald-400 transition-all"
+                className={`mc-button mc-button-secondary flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-neutral-800 hover:border-emerald-500 hover:text-emerald-400 transition-all ${IS_HANDY_MODE ? 'w-full text-lg shadow-lg' : ''}`}
                 title="Diesen Link kopieren oder Lesezeichen für direkten Spielstart erstellen!"
               >
                 <span>Direkt-Link kopieren 🔗</span>
               </button>
               <button 
                 onClick={() => document.getElementById('codes')?.scrollIntoView({ behavior: 'smooth' })}
-                className="mc-button mc-button-secondary flex items-center gap-2 px-6 py-3 rounded-xl border border-neutral-800 transition-all"
+                className={`mc-button mc-button-secondary flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-neutral-800 transition-all ${IS_HANDY_MODE ? 'w-full text-lg shadow-lg' : ''}`}
               >
                 Codes abrufen
                 <ChevronRight size={16} />
@@ -12204,7 +12206,7 @@ export default function App() {
                 href={DISCORD_URL} 
                 target="_blank" 
                 rel="noreferrer"
-                className="mc-button mc-button-secondary flex items-center gap-2 px-6 py-3 rounded-xl border border-neutral-800 transition-all"
+                className={`mc-button mc-button-secondary flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-neutral-800 transition-all ${IS_HANDY_MODE ? 'w-full text-lg shadow-lg' : ''}`}
               >
                 Discord Server
                 <ExternalLink size={16} />
@@ -12404,7 +12406,7 @@ export default function App() {
 
         {/* Realm Codes Section */}
         <section id="codes" className="mb-24">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div className={`flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 ${IS_HANDY_MODE ? 'text-center items-center' : ''}`}>
             <div>
               <h2 className="text-3xl font-bold mb-4">Realm Zugangscodes</h2>
               <p className="text-neutral-400">Direkter Zugang für geprüfte Community-Mitglieder.</p>
@@ -12821,7 +12823,7 @@ export default function App() {
         {/* Clan System Section */}
         <section id="clans" className="mb-12 py-8 border-t border-neutral-800/50">
           <div 
-            className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6 cursor-pointer group"
+            className={`flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6 cursor-pointer group ${IS_HANDY_MODE ? 'text-center items-center' : ''}`}
             onClick={() => setIsClansOpen(!isClansOpen)}
           >
             <div>
@@ -13320,7 +13322,7 @@ export default function App() {
         {/* Entwickler-Zentrum Portal Section */}
         {(false && (myProfile?.role === 'Owner' || myProfile?.role === 'Root' || isOwner || isSuperAdmin)) && (
           <section className="mb-24 py-8 border-t border-neutral-800/50">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div className={`flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 ${IS_HANDY_MODE ? 'text-center items-center' : ''}`}>
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-cyan-500/10 text-cyan-400 rounded-full border border-cyan-500/20 text-xs font-semibold mb-3">
                   <Cpu size={12} className="animate-pulse" />
