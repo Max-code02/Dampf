@@ -135,24 +135,52 @@
     </script>
   </head>
   <body>
-    <div id="device-prompt" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:sans-serif;">
-      <h2>Bist du am Handy oder PC?</h2>
-      <div style="display:flex;gap:20px;margin-top:20px;">
-        <button onclick="selectDevice('handy')" style="padding:15px 30px;font-size:18px;cursor:pointer;background:#10b981;border:none;color:white;border-radius:8px;">Handy</button>
-        <button onclick="selectDevice('pc')" style="padding:15px 30px;font-size:18px;cursor:pointer;background:#3b82f6;border:none;color:white;border-radius:8px;">PC</button>
+    <style>
+      #dp-new { position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at top,#1e293b 0%,#020617 100%);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:ui-sans-serif,system-ui,sans-serif; }
+      .dp-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); padding:40px; border-radius:24px; text-align:center; backdrop-filter:blur(16px); box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); max-width:90vw; }
+      .dp-icon { width:64px;height:64px;background:linear-gradient(135deg,#22c55e,#10b981);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-weight:bold;font-size:28px;box-shadow:0 10px 25px -5px rgba(34,197,94,0.4); }
+      .dp-btn-h { padding:14px 28px;font-size:16px;font-weight:600;cursor:pointer;background:linear-gradient(to bottom,#22c55e,#16a34a);border:1px solid #14532d;color:white;border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2),0 4px 14px 0 rgba(34,197,94,0.39);display:flex;align-items:center;gap:10px; }
+      .dp-btn-p { padding:14px 28px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:white;border-radius:14px;display:flex;align-items:center;gap:10px; }
+      .dp-btn-t { position:absolute;bottom:24px;padding:10px 20px;border-radius:30px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-size:13px;cursor:pointer;backdrop-filter:blur(5px); }
+    </style>
+    <div id="dp-wrap">
+      <div id="dp-old" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:sans-serif;">
+        <h2>Bist du am Handy oder PC?</h2>
+        <div style="display:flex;gap:20px;margin-top:20px;">
+          <button onclick="selectDevice('handy')" style="padding:15px 30px;font-size:18px;cursor:pointer;background:#10b981;border:none;color:white;border-radius:8px;">Handy</button>
+          <button onclick="selectDevice('pc')" style="padding:15px 30px;font-size:18px;cursor:pointer;background:#3b82f6;border:none;color:white;border-radius:8px;">PC</button>
+        </div>
+      </div>
+      <div id="dp-new">
+        <div class="dp-card">
+          <div class="dp-icon">D</div>
+          <h2 style="font-size:28px;font-weight:800;margin:0 0 12px;text-shadow:0 2px 10px rgba(0,0,0,0.5);">Wähle dein Gerät</h2>
+          <p style="color:#94a3b8;margin:0 auto 32px;max-width:300px;line-height:1.6;font-size:15px;">Wähle bitte dein Gerät für das beste Erlebnis.</p>
+          <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+            <button onclick="selectDevice('handy')" class="dp-btn-h">📱 Handy</button>
+            <button onclick="selectDevice('pc')" class="dp-btn-p">💻 Computer</button>
+          </div>
+        </div>
+        <button onclick="toggleDp()" class="dp-btn-t">Altes Design</button>
       </div>
     </div>
     <script>
-      if (sessionStorage.getItem('device_checked')) {
-        document.getElementById('device-prompt').style.display = 'none';
+      function toggleDp() {
+        let o = document.getElementById('dp-old'), n = document.getElementById('dp-new');
+        if (o.style.display === 'none') {
+          o.style.display = 'flex'; n.style.display = 'none';
+          if(!document.getElementById('dp-back')) {
+            let b = document.createElement('button'); b.id='dp-back'; b.innerText='Neues Design';
+            b.style='margin-top:40px;padding:10px 20px;background:transparent;border:1px solid white;color:white;border-radius:8px;cursor:pointer;';
+            b.onclick = toggleDp; o.appendChild(b);
+          }
+        } else { o.style.display = 'none'; n.style.display = 'flex'; }
       }
+      if (sessionStorage.getItem('device_checked')) document.getElementById('dp-wrap').style.display = 'none';
       function selectDevice(device) {
         sessionStorage.setItem('device_checked', 'true');
-        if (device === 'handy') {
-          window.location.href = '/handy.html';
-        } else {
-          document.getElementById('device-prompt').style.display = 'none';
-        }
+        if (device === 'handy') window.location.href = '/handy.html';
+        else document.getElementById('dp-wrap').style.display = 'none';
       }
     </script>
     <div id="root"></div>
